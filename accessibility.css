@@ -1,0 +1,28 @@
+/* Mobile readability and tap-target improvements. Loaded after visual themes. */
+@media (max-width: 520px) {
+  .stage-heading p, .play-hint, .game-footer button, .booster,
+  .score-guidance, .stat-label, .rank-mode, .difficulty-badge,
+  .chapter-label, .rank-period > button, .rank-period > span,
+  .rank-stage-select, .ranking-banner small, .rank-person small,
+  .ranking-profile summary, .ranking-profile form label,
+  .ranking-profile form button, .ranking-profile > p,
+  .result-ranking small, .result-ranking strong, .ranking-reset,
+  .ranking-empty small, .map-legend, .chapter-intro > span,
+  .chapter-intro p, .map-fifty .map-level > small {
+    font-size: max(11px, 0.6875rem) !important;
+    line-height: 1.35;
+  }
+  .rank-person strong, .ranking-banner strong,
+  .rank-points, .score-display strong { font-size: 14px; }
+  .rank-period > button, .game-footer button,
+  .ranking-profile form button { min-height: 44px; }
+  .chapter-label, .rank-mode, .difficulty-badge { min-height: 28px; }
+  .map-fifty .map-level { min-height: 78px; }
+  .map-fifty .map-level > small { line-height: 1.15; overflow-wrap: anywhere; }
+  .stage-heading p { display: block; }
+}
+@media (max-width: 360px) {
+  .stage-heading p { display: block; font-size: 11px !important; }
+  .game-footer button { min-width: 0; flex: 1; }
+  .chapter-label, .rank-mode, .difficulty-badge { padding-inline: 5px; }
+}
