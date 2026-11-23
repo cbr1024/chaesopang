@@ -758,7 +758,9 @@
         $('ranking-competition').innerHTML='<strong>정원과 친구의 기억은 그대로예요</strong><p>계정을 확인한 뒤 새 리그 도전을 시작해요.</p>';renderWeekly(false);updateRankStatus();
         $('recover-ranking').addEventListener('click',()=>showModal('ranking-recovery'));return;
       }
-      $('ranking-results').innerHTML='<div class="ranking-empty offline"><span>'+icon('flower')+'</span><strong>잠시 연결을 기다리고 있어요</strong><p>정원은 계속 즐길 수 있어요.<br>연결되면 다른 친구들의 기록을 만나봐요.</p>'+(ranking.pendingCount?'<small>제출을 기다리는 기록 '+ranking.pendingCount+'개</small>':'')+'<button id="retry-ranking" class="secondary-button">다시 연결하기</button></div>';
+      const offlineTitle=error.code==='REQUEST_TIMEOUT'?'연결에 시간이 조금 더 필요해요':error.code==='NETWORK_ERROR'?'랭킹 연결을 확인해 주세요':'잠시 연결을 기다리고 있어요';
+      const offlineMessage=error.code==='REQUEST_TIMEOUT'?'서버 응답을 기다리다 잠시 멈췄어요.<br>기록은 보관 중이니 다시 연결해 주세요.':error.code==='NETWORK_ERROR'?'네트워크 연결을 확인한 뒤 다시 눌러 주세요.<br>정원은 계속 즐길 수 있어요.':'정원은 계속 즐길 수 있어요.<br>연결되면 다른 친구들의 기록을 만나봐요.';
+      $('ranking-results').innerHTML='<div class="ranking-empty offline"><span>'+icon('flower')+'</span><strong>'+offlineTitle+'</strong><p>'+offlineMessage+'</p>'+(ranking.pendingCount?'<small>제출을 기다리는 기록 '+ranking.pendingCount+'개</small>':'')+'<button id="retry-ranking" class="secondary-button">다시 연결하기</button></div>';
       $('ranking-own').replaceChildren();$('ranking-reset').textContent='연습 기록은 이 기기에 저장돼요.';
       $('ranking-competition').innerHTML='<strong>연결되면 다음 라이벌을 만나요</strong><p>플레이 기록은 이 기기에 보관해요.</p>';renderWeekly(false);
       $('retry-ranking').addEventListener('click',rankingModal);
