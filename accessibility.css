@@ -26,3 +26,18 @@
   .game-footer button { min-width: 0; flex: 1; }
   .chapter-label, .rank-mode, .difficulty-badge { padding-inline: 5px; }
 }
+
+/* Reduce competing navigation actions without removing access to features. */
+.more-nav { display:none !important; }
+.backup-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0; }
+.backup-actions button { min-height:44px; border:1px solid #cfe0d2; background:#eef8ee; border-radius:13px; font-size:12px; font-weight:700; padding:8px; color:#547a68; }
+.backup-field { display:flex; flex-direction:column; text-align:left; gap:6px; margin:15px 0; font-size:13px; font-weight:650; }
+.backup-field input { width:100%; min-height:44px; border:1px solid #cbded0; border-radius:12px; padding:10px; font-size:16px; background:#fff; color:#425d5a; }
+#backup-status { min-height:22px; font-size:12px; color:#8a6852; }
+@media(max-width:520px) {
+  #story-button,#help-button { display:none !important; }
+  .game-footer .more-nav { display:flex !important; }
+  .game-footer { justify-content:space-between; }
+  .game-footer button { flex:1; }
+  .backup-actions { grid-template-columns:1fr; }
+}
