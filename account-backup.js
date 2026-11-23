@@ -4,7 +4,7 @@
   const KEYS = ['lumi-garden-v3', 'lumi.ranking.identity.v1', 'lumi.ranking.journal.v1'];
   const VERSION = 1, ITERATIONS = 250000, MAX_BYTES = 2 * 1024 * 1024;
   const encoder = new TextEncoder(), decoder = new TextDecoder();
-  const encode = bytes => btoa(String.fromCharCode(...bytes));
+  const encode = bytes => { let output=''; for(let i=0;i<bytes.length;i+=8192) output+=String.fromCharCode(...bytes.subarray(i,i+8192)); return btoa(output); };
   const decode = value => Uint8Array.from(atob(value), char => char.charCodeAt(0));
   function available() {
     if (!root.crypto?.subtle || !root.crypto.getRandomValues || !root.localStorage) throw Error('HTTPS 및 브라우저 저장 기능이 필요해요.');
