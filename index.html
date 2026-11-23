@@ -15,7 +15,7 @@
 <link rel="stylesheet" href="sensory.css?v=f1bb0365713f">
 <link rel="stylesheet" href="world.css?v=a834908674b3">
 <link rel="stylesheet" href="plush.css?v=2ea826fd6e73">
-<link rel="stylesheet" href="accessibility.css?v=1">
+<link rel="stylesheet" href="accessibility.css?v=2">
 <script defer src="game-config.js?v=52a5bf875bcb"></script>
 <script defer src="session-guard.js?v=b33599a50396"></script>
 <script defer src="mobile.js?v=98b180e52177"></script>
@@ -30,7 +30,8 @@
 <script defer src="effects.js?v=d73dd7293107"></script>
 <script defer src="board.js?v=8fb86ccf7c90"></script>
 <script defer src="ranking-client.js?v=3646e06ef193"></script>
-<script defer src="app.js?v=00bbd5950823"></script>
+<script defer src="account-backup.js?v=1"></script>
+<script defer src="app.js?v=account-menu-recovery-1"></script>
 </head>
 <body>
   <svg class="icon-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
@@ -162,7 +163,7 @@
         <button class="booster" id="shuffle-button" aria-label="보드 섞기, 2회 남음"><span class="booster-gem shuffle-gem"><svg class="icon"><use href="#i-shuffle"/></svg><span class="booster-count" id="shuffle-count">2</span></span><span>산들바람</span></button>
         <button class="booster" id="blast-button" aria-label="마법 터뜨리기, 2회 남음" aria-pressed="false"><span class="booster-gem blast-gem"><svg class="icon"><use href="#i-wand"/></svg><span class="booster-count" id="blast-count">2</span></span><span>꽃비 마법</span></button>
       </div>
-      <nav class="game-footer" aria-label="정원 메뉴"><button id="map-button"><svg class="icon"><use href="#i-map"/></svg>햇살밭 지도</button><button id="album-button"><svg class="icon"><use href="#i-heart"/></svg>친구 도감</button><button id="ranking-button" class="ranking-nav"><svg class="icon"><use href="#i-trophy"/></svg>랭킹</button><button id="story-button"><svg class="icon"><use href="#i-book"/></svg>이야기</button><button id="help-button"><svg class="icon"><use href="#i-help"/></svg>놀이 방법</button></nav>
+      <nav class="game-footer" aria-label="정원 메뉴"><button id="map-button"><svg class="icon"><use href="#i-map"/></svg>햇살밭 지도</button><button id="album-button"><svg class="icon"><use href="#i-heart"/></svg>친구 도감</button><button id="ranking-button" class="ranking-nav"><svg class="icon"><use href="#i-trophy"/></svg>랭킹</button><button id="story-button"><svg class="icon"><use href="#i-book"/></svg>이야기</button><button id="help-button"><svg class="icon"><use href="#i-help"/></svg>놀이 방법</button><button id="more-button" class="more-nav" aria-label="더보기 메뉴"><svg class="icon"><use href="#i-settings"/></svg>더보기</button></nav>
     </section>
 
     <aside class="journey-side" aria-label="정원 여행">
