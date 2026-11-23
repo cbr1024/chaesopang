@@ -494,7 +494,7 @@
       let startedRun=null;
       try {startedRun=await ranking.startRun(level,{buddyType:profile.selectedBuddy});} catch(error) {
         if(loadingEpoch!==epoch)return;
-        if(['RULESET_CHANGED','QUEUE_FULL','INVALID_TOKEN'].includes(error.code))rankStartIssue={code:error.code,message:error.message};
+        rankStartIssue={code:error.code||'NETWORK_ERROR',message:error.message||'랭킹 서버 연결에 실패했어요. 이번 판은 연습으로 진행돼요.'};
         ranking.abandonRun();
       }
       if(loadingEpoch!==epoch)return;
@@ -515,7 +515,7 @@
     $('difficulty-badge').dataset.difficulty=definition.difficulty||'normal';
     rankStage=level;updateRankStatus();
     $('chapter-number').textContent='STAGE '+String(level).padStart(2,'0');
-    setHint();sidebars();hud(game.snapshot(),true);updateJourneyHUD();controls();rememberSession();
+    setHint('이번 단계 요령 · '+(definition.recommendedSkill||'목표를 먼저 확인하세요'));sidebars();hud(game.snapshot(),true);updateJourneyHUD();controls();rememberSession();
     const gardenEpoch=epoch;
     await view.render(game.snapshot(),'entry');
     if(gardenEpoch!==epoch)return;
@@ -601,6 +601,8 @@
     else if(type==='relations') relationsModal(data.type);
     else if(type==='world-guide') worldGuideModal();
     else if(type==='settings') settingsModal();
+    else if(type==='more') moreModal();
+    else if(type==='backup-export'||type==='backup-import') backupModal(type);
     $('modal-backdrop').hidden=false;
     $('modal-content').scrollTop=0;
     document.querySelector('.app-shell').inert=true;document.body.style.overflow='hidden';document.body.classList.add('modal-open');
@@ -617,7 +619,7 @@
   function updateRankStatus() {
     const active=Boolean(rankRun);
     const recovery=ranking.getRecoveryState();
-    $('rank-mode').textContent=recovery.required?'리그 연결 확인':active?'랭킹 도전':rankStartIssue?.code==='RULESET_CHANGED'?'업데이트 필요':ranking.pendingCount?'제출 대기 '+ranking.pendingCount:'연습 플레이';
+    $('rank-mode').textContent=recovery.required?'계정 확인 필요':active?'랭킹 도전':rankStartIssue?.code==='RULESET_CHANGED'?'업데이트 필요':ranking.pendingCount?'제출 대기 '+ranking.pendingCount:'연습 · 미인증';
     $('rank-mode').classList.toggle('connected',active);
     $('rank-mode').setAttribute('aria-label',active?'서버 검증 랭킹 도전 중':rankStartIssue?.message||'랭킹 상태와 기록 보기');
     $('header-ranking').classList.toggle('has-pending',ranking.pendingCount>0);
@@ -1136,6 +1138,38 @@
     },true);
     modalButton('다른 친구 만나보기',()=>showModal('album'));
   }
+  function moreModal() {
+    modalHeader('MORE TO EXPLORE','햇살밭 더 둘러보기','happy',null);
+    $('modal-content').innerHTML='<p>퍼즐에 집중할 수 있도록 부가 메뉴를 이곳에 모았어요.</p>';
+    for(const [label,type] of [['이야기','storybook'],['놀이 방법','help'],['햇살밭 복원','world'],['이번 약속','promise'],['환경 설정·계정 백업','settings']]) modalButton(label,()=>showModal(type));
+    modalButton('게임으로 돌아가기',closeModal,true);
+  }
+  function backupModal(mode) {
+    const exporting=mode==='backup-export';
+    modalHeader('ACCOUNT RECOVERY',exporting?'복구용 백업 만들기':'백업 파일에서 복원하기','idle',null);
+    $('modal-content').innerHTML='<p>'+(exporting?'진행 기록과 랭킹 계정을 암호화하여 이 기기에 파일로 저장해요.':'백업 당시의 정원 기록으로 현재 기기 데이터를 교체합니다. 온라인 랭킹은 백업 계정의 소유권을 서버에서 검증해요.')+'</p>'+
+      '<p class="save-note">암호는 12자 이상이며 서버로 전송되지 않습니다. 암호 또는 백업 파일을 잃으면 이 방법으로 복구할 수 없어요.</p>'+
+      '<label class="backup-field">복구 암호<input id="backup-password" type="password" minlength="12" autocomplete="new-password" placeholder="12자 이상 입력"></label>'+
+      (exporting?'<label class="backup-field">암호 다시 입력<input id="backup-confirm" type="password" minlength="12" autocomplete="new-password" placeholder="암호 확인"></label>':'<label class="backup-field">암호화 백업 파일<input id="backup-file" type="file" accept=".json,application/json"></label>')+
+      '<p id="backup-status" role="status" aria-live="polite"></p>';
+    modalButton(exporting?'암호화 파일 저장':'복원 실행',async()=>{
+      const pw=$('backup-password').value,status=$('backup-status');status.textContent='';
+      if(pw.length<12){status.textContent='암호를 12자 이상 입력해 주세요.';return;}
+      if(exporting&&pw!==$('backup-confirm').value){status.textContent='확인 암호가 다릅니다.';return;}
+      const file=!exporting?$('backup-file').files[0]:null;
+      if(!exporting&&!file){status.textContent='백업 파일을 선택해 주세요.';return;}
+      if(!exporting&&!confirm('현재 기기의 진행 기록과 계정이 백업 파일의 기록으로 교체됩니다. 계속할까요?'))return;
+      const buttons=[...$('modal-actions').querySelectorAll('button')];buttons.forEach(b=>b.disabled=true);
+      status.textContent=exporting?'암호화 파일을 만들고 있어요.':'계정을 검증하고 복원하고 있어요.';
+      try {
+        const result=exporting?await LumiAccountBackup.create(pw):await LumiAccountBackup.restore(file,pw,LumiConfig.rankingApiBase);
+        status.textContent=exporting?'백업 파일 저장을 요청했어요. 다운로드 폴더를 확인하세요.':'복원 성공. 게임을 다시 불러옵니다.';
+        if(!exporting)location.reload();
+      }catch(error){status.textContent=error.message||'작업에 실패했어요. 현재 기록은 유지됩니다.';}
+      finally{buttons.forEach(b=>b.disabled=false);}
+    },true);
+    modalButton('돌아가기',()=>showModal('settings'));
+  }
   function settingsModal() {
     modalHeader('MAKE YOURSELF AT HOME','내게 꼭 맞는 정원','wink',3);
     $('modal-content').innerHTML='<div class="settings-list">'+
@@ -1144,7 +1178,10 @@
       '<label class="setting-row"><span><strong>손끝의 작은 반짝임</strong><small>교환과 매치의 가벼운 진동</small></span><input class="switch" id="haptics-setting" type="checkbox" '+(settings.haptics?'checked':'')+' aria-label="진동 피드백"></label>'+
       '<label class="volume-row"><input id="volume-setting" type="range" min="0" max="100" step="1" value="'+Math.round(settings.volume*100)+'" aria-label="전체 음량"><output id="volume-value">'+Math.round(settings.volume*100)+'%</output></label></div>'+
       '<div class="settings-stat"><div><small>최고 점수</small><strong>'+fmt(profile.bestScore)+'</strong></div><div><small>최고 연쇄</small><strong>×'+profile.maxCombo+'</strong></div></div>'+
-      '<p class="save-note">정원과 친밀도는 이 브라우저에 자동 저장돼요.<br>기기의 동작 줄이기 설정을 따릅니다.</p>';
+      '<p class="save-note">정원과 친밀도는 이 브라우저에 자동 저장돼요. 다른 기기에서 계속하려면 암호화 백업을 만들어 두세요.<br>기기의 동작 줄이기 설정을 따릅니다.</p>'+
+      '<div class="backup-actions"><button id="backup-export-button" type="button">복구용 백업 저장</button><button id="backup-import-button" type="button">백업에서 복원</button></div>'; 
+    $('backup-export-button').addEventListener('click',()=>showModal('backup-export'));
+    $('backup-import-button').addEventListener('click',()=>showModal('backup-import'));
     $('music-setting').addEventListener('change',e=>{settings.music=e.target.checked;applyAudio();unlockAudio();persist();});
     $('sfx-setting').addEventListener('change',e=>{settings.sfx=e.target.checked;applyAudio();unlockAudio();if(settings.sfx)audio.play('button');persist();});
     $('volume-setting').addEventListener('input',e=>{settings.volume=Number(e.target.value)/100;audio.setVolume(settings.volume);$('volume-value').textContent=e.target.value+'%';});
@@ -1174,6 +1211,7 @@
   $('pause-button').addEventListener('click',()=>showModal(game.won?'win':game.over?'lose':'pause'));
   $('help-button').addEventListener('click',()=>showModal('help'));
   $('story-button').addEventListener('click',()=>showModal('storybook'));
+  $('more-button').addEventListener('click',()=>showModal('more'));
   $('promise-button').addEventListener('click',()=>showModal('promise'));
   $('side-world-button').addEventListener('click',()=>showModal('world'));
   $('settings-button').addEventListener('click',()=>showModal('settings'));
