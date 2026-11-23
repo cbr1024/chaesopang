@@ -147,6 +147,7 @@
     async _request(route, options = {}) {
       this._assertWritable();
       if (!this.baseUrl || !this._fetch) throw new RankingError('RANKING_OFFLINE', '랭킹 서버가 연결되지 않아 연습 모드로 플레이해요.');
+      const startedAt = Date.now();
       const controller = new AbortController();
       const parentSignal = options.signal;
       const abort = () => controller.abort();
@@ -181,8 +182,12 @@
         if (requestPlayerId && this._state.authError?.playerId === requestPlayerId) { this._state.authError = null; this._save(); }
         return value;
       } catch (error) {
-        if (error instanceof RankingError) throw error;
-        throw new RankingError(controller.signal.aborted ? 'REQUEST_TIMEOUT' : 'NETWORK_ERROR', '연결이 원활하지 않아요. 기록을 보관하고 다시 시도할게요.');
+        const failure = error instanceof RankingError ? error : new RankingError(controller.signal.aborted ? 'REQUEST_TIMEOUT' : 'NETWORK_ERROR', '연결이 원활하지 않아요. 기록을 보관하고 다시 시도할게요.');
+        // Keep support diagnostics useful without logging credentials, payloads,
+        // player IDs, query strings or a server-provided error message.
+        root.console?.warn?.('[채소팡 랭킹]', JSON.stringify({ route: route.split('?')[0], code: failure.code,
+          status: failure.status, elapsedMs: Math.max(0, Date.now() - startedAt) }));
+        throw failure;
       } finally {
         root.clearTimeout(timeout); parentSignal?.removeEventListener('abort', abort);
       }
