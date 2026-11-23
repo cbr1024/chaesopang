@@ -3,6 +3,6 @@
  * An empty API base uses the web origin; native packages need an HTTPS base. */
 window.LumiConfig = Object.freeze({
   "rankingApiBase": "https://isgjrnpwivhpttfjnrri.supabase.co/functions/v1/chaesopang-ranking",
-  "rankingTimeout": 12000,
+  "rankingTimeout": 6000,
   "ruleset": "lumi-f77b38bcf45aad26a7dc69b4"
 });
