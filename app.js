@@ -103,8 +103,12 @@
     clearTimeout(toastTimer); $('board-toast').textContent=text; $('board-toast').classList.add('visible');
     toastTimer=setTimeout(()=>$('board-toast').classList.remove('visible'),duration);
   }
+  const isV2Game=()=>game instanceof LumiEngineV2.Game;
+  const activeDefinition=(id=level)=>id===level&&game&&!game.won&&!game.over&&!isV2Game()?LumiLevels[id-1]:LumiLevelsV2[id-1];
+  const terrainName=kind=>kind==='weed'?'잡초':'서리';
+  const terrainIcon=kind=>icon(kind==='weed'?'leaf':'frost');
   function setHint(text) {
-    $('play-hint').textContent=text || (blastMode?'꽃비를 내릴 친구를 톡! 주변 3×3칸이 꽃피어요':profile.hasSeenTutorial?(LumiLevels[level-1]?.recommendedSkill||'남은 목표를 먼저 확인해요'):'같은 빛모습 3개를 나란히 모아보세요');
+    $('play-hint').textContent=text || (blastMode?'꽃비를 내릴 친구를 톡! 주변 3×3칸이 꽃피어요':profile.hasSeenTutorial?(activeDefinition()?.recommendedSkill||'남은 목표를 먼저 확인해요'):'같은 빛모습 3개를 나란히 모아보세요');
   }
   function controls() {
     const ended=game && (game.won || game.over);
@@ -134,12 +138,13 @@
     node.animate([{transform:'scale(1)'},{transform:'scale(1.17)',offset:.4},{transform:'scale(1)'}],{duration:270,easing:'ease-out'}).finished.catch(()=>{});
   }
   function prepareGoals(snapshot) {
-    const signature=snapshot.objectives.map(g=>g.type+':'+g.target).join('|')+'|'+snapshot.budsGoal;
+    const terrainGoals=Object.entries(snapshot.terrainGoal||{}).filter(([,n])=>n>0);
+    const signature=snapshot.objectives.map(g=>g.type+':'+g.target).join('|')+'|'+snapshot.budsGoal+'|'+JSON.stringify(terrainGoals);
     if(signature===goalsSignature)return;
     goalsSignature=signature;
     $('mission-goals').innerHTML=snapshot.objectives.map(g=>'<div class="mission-goal" id="goal-'+g.type+'"><span class="goal-art">'+art(g.type)+'</span><strong>'+g.target+'</strong></div>').join('')+
-      (snapshot.budsGoal?'<div class="mission-goal" id="goal-buds"><span class="goal-art goal-bud">'+icon('flower')+'</span><strong>'+snapshot.budsGoal+'</strong></div>':'');
-    $('mission-goals').classList.toggle('many',snapshot.objectives.length+(snapshot.budsGoal?1:0)>=4);
+      (snapshot.budsGoal?'<div class="mission-goal" id="goal-buds"><span class="goal-art goal-bud">'+icon('flower')+'</span><strong>'+snapshot.budsGoal+'</strong></div>':'')+terrainGoals.map(([kind,n])=>'<div class="mission-goal" id="goal-terrain-'+kind+'"><span class="goal-art goal-'+kind+'">'+terrainIcon(kind)+'</span><strong>'+n+'</strong></div>').join('');
+    $('mission-goals').classList.toggle('many',snapshot.objectives.length+(snapshot.budsGoal?1:0)+terrainGoals.length>=4);
   }
   function updateGoal(node,remaining,label) {
     if(!node)return;
@@ -154,6 +159,7 @@
     prepareGoals(snapshot);
     for(const goal of snapshot.objectives) updateGoal($('goal-'+goal.type),Math.max(0,goal.target-goal.current),LumiArt.names[goal.type]+'의 팡빛 모으기');
     if(snapshot.budsGoal)updateGoal($('goal-buds'),Math.max(0,snapshot.budsGoal-snapshot.bloomed),'꽃봉오리 피우기');
+    for(const [kind,n] of Object.entries(snapshot.terrainRemaining||{}))if(snapshot.terrainGoal[kind])updateGoal($('goal-terrain-'+kind),n,terrainName(kind)+' 제거');
     const from=shownScore,to=snapshot.score,start=performance.now();
     if (to!==scoreTarget || instant) {
     scoreTarget=to; cancelAnimationFrame(scoreAnimation);
@@ -326,16 +332,17 @@
   function showHint(manual=true) {
     if(busy || modalType || game.won || game.over)return;
     clearHints();blastMode=false;view.select(null);controls();setHint();
-    const pair=LumiHints.hint(game);if(!pair)return;
+    const pair=isV2Game()?game.hint():LumiHints.hint(game);if(!pair)return;
     view.showHint(pair);
     if(manual){audio.play('hint');toast('반짝이는 두 친구를 바꿔보세요');}
     else if(!profile.hasSeenTutorial)toast('친구를 톡톡 누르거나, 옆으로 밀어봐요!',3000);
     hintTimer=setTimeout(()=>{view.clearHints();scheduleHint();},4500);
   }
-  function combo(number,fever=false) {
+  function combo(number,fever=false,special=null) {
     const words=['팡!','빛이 톡톡!','팡빛 물결!','햇살이 활짝!','모두 함께 팡!'];
-    $('combo-label').textContent=fever?'햇살 합창!':words[Math.min(number-1,4)];
-    $('combo-caption').textContent=fever?'지금부터 · 다음 교환 3회까지 ×2':number+'연쇄 · 마음을 잇는 팡빛';
+    const comboNames={'line-line':'십자 햇살!','line-bomb':'꽃비 폭풍!','bomb-bomb':'커다란 씨앗 폭발!','rainbow-special':'무지개 팡빛!','rainbow-rainbow':'햇살 대폭발!'};
+    $('combo-label').textContent=fever?'햇살 합창!':comboNames[special]||words[Math.min(number-1,4)];
+    $('combo-caption').textContent=fever?'지금부터 · 다음 교환 3회까지 ×2':special?'특수 팡빛 조합 성공!':number+'연쇄 · 마음을 잇는 팡빛';
     clearTimeout(comboTimer);comboAnimation?.cancel();
     const display=$('combo-display');display.style.removeProperty('opacity');display.style.removeProperty('transform');
     if(motion.matches){
@@ -409,7 +416,7 @@
     const placeState=LumiJourney.getRestoration(profile,Math.ceil(level/10));view.setChapter?.(placeState.chapter,placeState.restored,Boolean(profile.stars[placeState.chapter*10-1]));
   }
   async function playResult(result,before,action=null) {
-    if(!result.events.length){scheduleHint();return;}
+    if(!result.events.length){if(result.reason==='frozen'){view.select(null);audio.play('invalid');toast('서리 위 친구는 교환할 수 없어요. 다른 칸에서 매치를 만들거나 특수 팡빛으로 녹여요.',3200);}scheduleHint();return;}
     const turnEpoch=epoch,focus=view.focusedPosition();
     busy=true;clearHints();dismissSpecialCoach();newSpecial=null;view.select(null);blastMode=false;controls();
     if(result.valid){
@@ -425,7 +432,7 @@
         else if(event.kind==='invalid'){audio.play('invalid');await view.render(event,'invalid');toast('세 친구가 모이면 자리를 바꿀 수 있어요',1700);}
         else if(event.kind==='clear'){
           maxCombo=Math.max(maxCombo,event.combo);
-          if(event.combo>1)combo(event.combo);
+          if(event.specialCombo)combo(event.combo,false,event.specialCombo);else if(event.combo>1)combo(event.combo);
           if(event.combo>=4)buddy('excited',event.combo+'연쇄! 우리 정말 잘 맞는다!','combo');
           else if(event.activated.length)buddy('excited','반짝! 우리 마법이 터졌어!','special');
           else buddy('happy',event.combo>1?event.combo+'연쇄! 행복이 이어져!':'좋아! 마음이 한 뼘 가까워졌어.','match');
@@ -451,7 +458,7 @@
     if(turnEpoch!==epoch)return;
     const snapshot=game.snapshot();hud(snapshot);refreshTurnUI();
     const turnCombo=Math.max(0,...result.events.filter(event=>event.kind==='clear').map(event=>event.combo||0));
-    $('announcer').textContent=fmt(snapshot.score)+'점, '+snapshot.moves+'회 남음. '+(turnCombo>1?turnCombo+'연쇄. ':'')+snapshot.objectives.map(g=>LumiArt.names[g.type]+' '+Math.max(0,g.target-g.current)+'개 남음').join(', ');
+    $('announcer').textContent=fmt(snapshot.score)+'점, '+snapshot.moves+'회 남음. '+(turnCombo>1?turnCombo+'연쇄. ':'')+snapshot.objectives.map(g=>LumiArt.names[g.type]+' '+Math.max(0,g.target-g.current)+'개 남음').join(', ')+Object.entries(snapshot.terrainRemaining||{}).filter(([k])=>snapshot.terrainGoal[k]).map(([k,n])=>', '+terrainName(k)+' '+n+'개 남음').join('');
     if(snapshot.won || snapshot.over){
       pendingModal=null;
       setHint(snapshot.won?'우리의 작은 정원이 활짝 피었어요!':'괜찮아요. 새로운 만남이 기다리고 있어요');
@@ -474,6 +481,7 @@
   function choose(position) {
     if(sessionInterrupted || busy || modalType || game.won || game.over || !sessionGuard.canWrite())return;
     clearHints();dismissSpecialCoach();
+    if(!blastMode&&game.terrain?.[position.r]?.[position.c]?.kind==='frost'){view.select(null);toast('이 칸의 서리를 직접 매치하거나 특수 팡빛으로 녹여요.');scheduleHint();return;}
     if(blastMode){
       if(blasts<1)return;
       const before=game.collected.slice();blasts--;audio.play('special');playResult(game.blast(position),before,{kind:'blast',position:{...position}});
@@ -495,11 +503,12 @@
     newSpecial=null;lastLowWarning=-1;reactionUntil=0;reactionPriority=0;resultDetails={};journeySignature='';
     $('board-toast').classList.remove('visible');
     level=Math.max(1,Math.min(profile.unlocked,id));
-    const definition=LumiLevels[level-1];
+    let definition=restore?(restore.game.version===LumiEngineV2.STATE_VERSION?LumiLevelsV2[level-1]:LumiLevels[level-1]):ranked?LumiLevels[level-1]:LumiLevelsV2[level-1];
     $('stage-title').textContent=definition.title;controls();
     if(restore){
-      game=LumiEngine.Game.fromState(restore.game);shuffles=restore.shuffles;blasts=restore.blasts;maxCombo=restore.maxCombo;
-      rankRun=ranking.restoreRun(game.exportState());
+      const restoreApi=restore.game.version===LumiEngineV2.STATE_VERSION?LumiEngineV2:LumiEngine;
+      game=restoreApi.Game.fromState(restore.game);shuffles=restore.shuffles;blasts=restore.blasts;maxCombo=restore.maxCombo;
+      rankRun=restoreApi===LumiEngine?ranking.restoreRun(game.exportState()):null;
       if(game.scoringVersion!==LumiRewards.SCORING_VERSION){ranking.abandonRun();rankRun=null;}
     } else {
       profile.attempts[level-1]++;
@@ -515,7 +524,9 @@
       if(loadingEpoch!==epoch)return;
       rankRun=startedRun;
       if(startedRun)syncRewards(startedRun);
-      game=new LumiEngine.Game({...definition,buddy:{type:profile.selectedBuddy,tier:LumiRewards.bond(companionXp(profile.selectedBuddy,false)).level},...(rankRun?.options||{}),rows:6,cols:6,types:6,requireScore:false,seed:rankRun?.seed??((Date.now()^Math.floor(Math.random()*0xffffffff))>>>0)});
+      definition=rankRun?LumiLevels[level-1]:LumiLevelsV2[level-1];
+      const GameClass=rankRun?LumiEngine.Game:LumiEngineV2.Game;
+      game=new GameClass({...definition,buddy:{type:profile.selectedBuddy,tier:LumiRewards.bond(companionXp(profile.selectedBuddy,false)).level},...(rankRun?.options||{}),rows:6,cols:6,types:6,requireScore:false,seed:rankRun?.seed??((Date.now()^Math.floor(Math.random()*0xffffffff))>>>0)});
       if(rankRun && !ranking.bindState(game.exportState())){ranking.abandonRun();rankRun=null;}
       shuffles=2;blasts=2;maxCombo=0;
     }
@@ -525,7 +536,7 @@
     $('stage-title').dataset.stageSummary='STAGE '+String(level).padStart(2,'0')+' · '+definition.difficultyLabel;
     $('stage-title').setAttribute('aria-label',level+'단계, '+definition.title+', '+definition.difficultyLabel);
     $('board-wrap').classList.remove('board-loading');
-    $('stage-subtitle').textContent=LumiStory.stageForLevel(level).action;
+    $('stage-subtitle').textContent=isV2Game()&&definition.terrain?.length?definition.subtitle:LumiStory.stageForLevel(level).action;
     $('difficulty-badge').textContent=definition.difficultyLabel||'산책';
     $('difficulty-badge').dataset.difficulty=definition.difficulty||'normal';
     rankStage=level;updateRankStatus();
@@ -539,6 +550,7 @@
     if(rankStartIssue)toast(rankStartIssue.message,4500);
     else if(initial.migrationNotice){toast(initial.migrationNotice,3800);initial.migrationNotice=null;}
     else if(restore)toast(game.scoringVersion===LumiRewards.SCORING_VERSION?'친구들이 기다렸어요. 이어서 놀아볼까요?':'기존 판을 이어가요. 새 보너스와 랭킹은 다음 판부터!',4000);
+    else if(definition.terrain?.length)toast(definition.recommendedSkill,3600);
     else if(game.budsGoal)toast(definition.buds.some(b=>b.hp>1)?'두 겹 봉오리는 같은 자리에서 두 번, 톡톡!':'봉오리 위에서 빛모습을 모으면 꽃이 피어요',3000);
     if(pendingModal){const next=pendingModal;pendingModal=null;showModal(next.type,next.data);}
     else if(!restore)buddy('wink',game.perks.startScore?'오늘의 응원 선물 +'+fmt(game.perks.startScore)+'점!':LumiArt.characters[profile.selectedBuddy].tagline,'selected');
@@ -573,7 +585,7 @@
   }
   function renderHome(){
     const active=Boolean(game&&!game.won&&!game.over),next=active?level:Math.min(TOTAL,profile.unlocked);
-    LumiHome.render($('v2-home'),{profile,level:next,active,busy,ranked:active&&Boolean(rankRun),identity:ranking.getIdentity(),view:screen,chapter:screen==='garden'?gardenChapter:Math.ceil(next/10),act:homeAct});
+    LumiHome.render($('v2-home'),{profile,level:next,definition:activeDefinition(next),active,busy,ranked:active&&Boolean(rankRun),identity:ranking.getIdentity(),view:screen,chapter:screen==='garden'?gardenChapter:Math.ceil(next/10),act:homeAct});
   }
   function setScreen(next,focus=true){
     if(sessionInterrupted||busy||backupBusy||recoveryBusy)return;
@@ -886,7 +898,7 @@
       '<div class="help-rule"><span>4</span><span><strong>4개는 한 줄 팡빛, 5개는 무지개.</strong><br>특수 빛모습은 이웃과 바꾸면 바로 발동!</span></div>'+
       '<div class="help-rule"><span>✿</span><span><strong>꽃봉오리 위에서 매치</strong>하면 꽃이 피어요.<br>두 겹 봉오리는 두 번. T·L 매치는 3×3 폭탄!</span></div>'+
       '<div class="help-rule"><span>×2</span><span><strong>햇살 합창! 충전 직후부터 매치 점수 두 배.</strong><br>남은 연쇄와 다음 교환 3회에 적용돼요.<br>힌트는 무제한, 바람·꽃비는 각각 2번!</span></div></div>'+
-      '<p class="help-bonus"><strong>남은 이동도 점수가 돼요.</strong><br>10회 이상 남기고 완성하면 별 3개!<br>친구 친밀도 혜택은 새 정원을 시작할 때 적용돼요.</p>'+
+      '<div class="help-rules"><div class="help-rule"><span>'+terrainIcon('weed')+'</span><span><strong>잡초</strong>는 직접 또는 옆 칸 매치로 제거해요. 두 겹은 두 번!</span></div><div class="help-rule"><span>'+terrainIcon('frost')+'</span><span><strong>서리</strong>는 직접 매치나 특수 팡빛으로 녹여요. 서리 위 친구는 교환할 수 없어요.</span></div><div class="help-rule"><span>'+icon('spark')+'</span><span>싱글 플레이에서 특수 팡빛끼리 교환하면 새로운 조합이 발동해요.</span></div></div><p class="help-bonus"><strong>남은 이동도 점수가 돼요.</strong><br>10회 이상 남기고 완성하면 별 3개!<br>친구 친밀도 혜택은 새 정원을 시작할 때 적용돼요.</p>'+
       '<p class="keyboard-note">방향키: 이동 · Enter/Space: 선택<br>Shift + 방향키: 바로 교환 · Esc: 닫기</p>';
     modalButton('친구들과 놀러 가기',closeModal,true);modalButton('햇살밭의 작은 약속들',()=>showModal('world-guide'));
   }
@@ -943,7 +955,7 @@
     $('modal').classList.add('result-modal');
     modalHeader(win?'STAGE '+String(level).padStart(2,'0')+' · IN FULL BLOOM':'A NEW LITTLE CHANCE',win?(level===TOTAL?'우리 정원이 완성됐어요!':'행복이 활짝 피었어요!'):'조금만 더, 할 수 있어요',win?'excited':'sleep',game.scoringVersion===4?game.buddy.type:profile.selectedBuddy);
     const goals=game.snapshot().objectives.map(g=>'<span>'+art(g.type,win?'happy':'idle')+(g.current>=g.target?icon('check'):Math.max(0,g.target-g.current)+' 남음')+'</span>').join('')+
-      (game.budsGoal?'<span>'+icon('flower')+(game.bloomed>=game.budsGoal?icon('check'):(game.budsGoal-game.bloomed)+' 남음')+'</span>':'');
+      (game.budsGoal?'<span>'+icon('flower')+(game.bloomed>=game.budsGoal?icon('check'):(game.budsGoal-game.bloomed)+' 남음')+'</span>':'')+Object.entries(snapshot.terrainRemaining||{}).filter(([kind])=>snapshot.terrainGoal[kind]).map(([kind,n])=>'<span aria-label="'+terrainName(kind)+' '+n+'개 남음">'+terrainIcon(kind)+(n?n+' 남음':icon('check'))+'</span>').join('');
     const missing=Math.max(0,LumiRewards.starThresholds(game.target)[2]-game.score);
     $('modal-content').innerHTML=(win?'<div class="result-stars" aria-label="별 '+stars+'개 획득">'+starMarkup(stars,true)+'</div>':'')+
       '<div class="result-score">'+fmt(game.score)+'</div><span class="result-caption">우리 함께 모은 반짝임</span>'+
@@ -1003,11 +1015,11 @@
   }
   function promiseModal(id) {
     id=Math.max(1,Math.min(profile.unlocked,Math.floor(Number(id)||level)));
-    const def=LumiLevels[id-1],story=LumiStory.stageForLevel(id);
+    const def=activeDefinition(id),story=LumiStory.stageForLevel(id);
     $('modal').classList.add('promise-modal');
     modalHeader('A LITTLE PROMISE · '+String(id).padStart(2,'0'),def.title,'happy',null);
     $('modal-content').innerHTML=worldVignette(def.chapter)+stageStoryCard(id)+
-      '<div class="story-play-link"><span>'+icon('spark')+'이번에 함께 할 일</span><strong>'+esc(story.action)+'</strong><p>목표 색의 팡빛을 모두 모으'+(def.buds.length?'고 잠든 봉오리를 모두 깨우':'')+'면 다음 길이 열려요.</p></div>'+
+      '<div class="story-play-link"><span>'+icon('spark')+'이번에 함께 할 일</span><strong>'+esc(def.terrain?.length?def.recommendedSkill:story.action)+'</strong><p>목표 색과 남은 봉오리·장애물을 모두 해결하면 다음 길이 열려요.</p></div>'+
       promiseCard(id,id===level?journeyRun:null)+
       '<button class="world-text-link" id="promise-world">'+icon('leaf')+'도장이 바꾸는 햇살밭 보기 <span>→</span></button>';
     $('promise-world').addEventListener('click',()=>showModal('world',{chapter:def.chapter}));
@@ -1150,7 +1162,7 @@
     const chapter=LumiLevels.chapters[chapterId-1];
     $('modal').classList.add('wide','garden-map');modalHeader('FIFTY LITTLE ADVENTURES','빛씨앗을 찾아, 50단계','happy',null);
     $('modal-content').innerHTML='<div class="chapter-tabs" role="tablist" aria-label="정원 챕터">'+LumiLevels.chapters.map(c=>'<button role="tab" aria-selected="'+(c.id===chapterId)+'" data-chapter="'+c.id+'" aria-label="'+c.id+'장 '+esc(c.title)+'"><span>'+String(c.id).padStart(2,'0')+'</span><small>'+((c.id-1)*10+1)+'–'+(c.id*10)+'</small></button>').join('')+'</div>'+
-      '<div class="chapter-intro" style="--chapter-color:'+chapter.color+'"><span>CHAPTER '+String(chapterId).padStart(2,'0')+'</span><h3>'+esc(chapter.title)+'</h3><p>'+esc(chapter.subtitle)+'</p></div><div class="map-grid map-fifty">'+LumiLevels.filter(d=>d.chapter===chapterId).map(def=>{
+      '<div class="chapter-intro" style="--chapter-color:'+chapter.color+'"><span>CHAPTER '+String(chapterId).padStart(2,'0')+'</span><h3>'+esc(chapter.title)+'</h3><p>'+esc(chapter.subtitle)+'</p></div><div class="map-grid map-fifty">'+LumiLevelsV2.filter(d=>d.chapter===chapterId).map(def=>{
         const locked=def.id>profile.unlocked;
         return '<button class="map-level '+(def.id===level?'current':'')+' '+def.difficulty+'" data-level="'+def.id+'" '+(locked?'disabled':'')+' aria-label="'+def.id+'번 '+esc(def.title)+', '+(locked?'잠김':profile.stars[def.id-1]+'별')+(profile.journey?.stamps[def.id-1]?', 햇살 도장 획득':'')+'"><strong>'+String(def.id).padStart(2,'0')+'</strong><span class="map-stars">'+(locked?icon('lock'):starMarkup(profile.stars[def.id-1]))+'</span>'+(profile.journey?.stamps[def.id-1]?'<span class="map-promise-stamp" aria-hidden="true">'+icon('leaf')+'</span>':'')+(def.difficulty!=='normal'?'<small>'+esc(def.difficultyLabel)+'</small>':'')+'</button>';
       }).join('')+'</div><div class="map-legend"><span>● 산책</span><span class="hard">● 도전</span><span class="expert">● 대모험</span></div><p class="save-note">별 '+profile.stars.reduce((a,b)=>a+b,0)+' / '+(TOTAL*3)+' · '+profile.stars.filter(n=>n>0).length+' / '+TOTAL+' 정원 완료</p>';
@@ -1170,11 +1182,11 @@
   }
   function levelModal(id) {
     if(!Number.isInteger(id) || id<1 || id>profile.unlocked){showModal('map');return;}
-    const def=LumiLevels[id-1];
+    const def=activeDefinition(id);
     modalHeader('STAGE '+String(id).padStart(2,'0'),def.title,'happy',def.objectives[0].type);
     $('modal-content').innerHTML=stageStoryCard(id)+'<div class="level-preview-goals">'+
       def.objectives.map(g=>'<span>'+art(g.type)+g.target+'</span>').join('')+
-      (def.buds.length?'<span>'+icon('flower')+def.buds.length+'</span>':'')+
+      (def.buds.length?'<span>'+icon('flower')+def.buds.length+'</span>':'')+['weed','frost'].map(kind=>{const n=(def.terrain||[]).filter(t=>t.kind===kind).length;return n?'<span aria-label="'+terrainName(kind)+' '+n+'개">'+terrainIcon(kind)+n+'</span>':'';}).join('')+
       '</div><div class="level-info">이동 '+def.moves+'번 · 최고 기록 '+fmt(profile.bestScores[id-1])+'점</div>'+
       '<p class="level-strategy"><strong>'+esc(def.difficultyLabel)+' · '+('●'.repeat(def.rating||1))+'</strong><br>'+esc(def.recommendedSkill||def.intent||'세 친구의 만남을 찾아보세요.')+'</p>'+
       '<div class="result-stars">'+starMarkup(profile.stars[id-1])+'</div>'+promiseCard(id,id===level?journeyRun:null);
