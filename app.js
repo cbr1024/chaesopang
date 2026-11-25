@@ -50,7 +50,7 @@
   let epoch = 0, hintTimer, toastTimer, buddyTimer, comboAnimation, comboTimer, scoreAnimation;
   let shownScore = 0, goalsSignature = '', storageNotice = false, lastFever = false, resultDetails = {};
   let companionSignature='', companionAnimation=null, reactionUntil=0, reactionPriority=0, coachTimer=null, coachCheckTimer=null, coachKind=null, coachVisibleSince=null, newSpecial=null;
-  let weeklyState=null, claimBusy=false, recoveryBusy=false, weeklyRecipient=profile.selectedBuddy, lastLowWarning=-1, friendshipAnimation=null;
+  let weeklyState=null, claimBusy=false, recoveryBusy=false, backupBusy=false, weeklyRecipient=profile.selectedBuddy, lastLowWarning=-1, friendshipAnimation=null;
   let journeyRun=null, journeySignature='';
   const view = new LumiBoard({
     board:$('board'),tiles:$('tiles'),budLayer:$('bud-layer'),cells:$('board-cells'),wrap:$('board-wrap'),fx,
@@ -88,7 +88,7 @@
   document.addEventListener('keydown',event=>{if(['Enter',' ','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.key))unlockAudio();});
 
   function persist() {
-    if(sessionInterrupted || !sessionGuard.canWrite())return false;
+    if(sessionInterrupted || backupBusy || !sessionGuard.canWrite())return false;
     LumiProgress.rememberMemories(profile);
     const okay=LumiProgress.save({profile,settings,session:storedSession});
     if(!okay && !storageNotice) { storageNotice=true; toast('이 브라우저에서는 기록을 보관할 수 없어요',3500); }
@@ -103,7 +103,7 @@
     toastTimer=setTimeout(()=>$('board-toast').classList.remove('visible'),duration);
   }
   function setHint(text) {
-    $('play-hint').textContent=text || (blastMode?'꽃비를 내릴 친구를 톡! 주변 3×3칸이 꽃피어요':'같은 빛모습 3개를 나란히 모아보세요');
+    $('play-hint').textContent=text || (blastMode?'꽃비를 내릴 친구를 톡! 주변 3×3칸이 꽃피어요':profile.hasSeenTutorial?(LumiLevels[level-1]?.recommendedSkill||'남은 목표를 먼저 확인해요'):'같은 빛모습 3개를 나란히 모아보세요');
   }
   function controls() {
     const ended=game && (game.won || game.over);
@@ -539,7 +539,7 @@
     node.textContent=text;node.addEventListener('click',()=>{audio.play('button');action();});$('modal-actions').appendChild(node);
   }
   function closeModal() {
-    if(sessionInterrupted||recoveryBusy)return;
+    if(sessionInterrupted||recoveryBusy||backupBusy)return;
     $('modal-backdrop').hidden=true;modalType=null;
     document.querySelector('.app-shell').inert=false;document.body.style.overflow='';
     document.body.classList.remove('modal-open');
@@ -564,7 +564,7 @@
     $('modal-art').innerHTML=type===null?'':art(type,mood);
   }
   function showModal(type,data={}) {
-    if(sessionInterrupted||recoveryBusy)return;
+    if(sessionInterrupted||recoveryBusy||backupBusy)return;
     if(busy){pendingModal={type,data};return;}
     const wasOpen=Boolean(modalType);
     if(!wasOpen)returnFocus=document.activeElement;
@@ -1175,14 +1175,17 @@
       const file=!exporting?$('backup-file').files[0]:null;
       if(!exporting&&!file){status.textContent='백업 파일을 선택해 주세요.';return;}
       if(!exporting&&!confirm('현재 기기의 진행 기록과 계정이 백업 파일의 기록으로 교체됩니다. 계속할까요?'))return;
+      if(backupBusy||!sessionGuard.canWrite())return;
+      if(exporting&&!persist()){status.textContent='현재 기록을 저장하지 못했어요. 저장 공간을 확인해 주세요.';return;}
+      backupBusy=true;$('modal-close').disabled=true;
       const buttons=[...$('modal-actions').querySelectorAll('button')];buttons.forEach(b=>b.disabled=true);
       status.textContent=exporting?'암호화 파일을 만들고 있어요.':'계정을 검증하고 복원하고 있어요.';
       try {
         const result=exporting?await LumiAccountBackup.create(pw):await LumiAccountBackup.restore(file,pw,LumiConfig.rankingApiBase);
         status.textContent=exporting?'백업 파일 저장을 요청했어요. 다운로드 폴더를 확인하세요.':'복원 성공. 게임을 다시 불러옵니다.';
-        if(!exporting)location.reload();
+        if(!exporting){sessionInterrupted=true;location.reload();}
       }catch(error){status.textContent=error.message||'작업에 실패했어요. 현재 기록은 유지됩니다.';}
-      finally{buttons.forEach(b=>b.disabled=false);}
+      finally{backupBusy=false;$('modal-close').disabled=false;buttons.forEach(b=>{if(b.isConnected)b.disabled=false;});}
     },true);
     modalButton('돌아가기',()=>showModal('settings'));
   }
