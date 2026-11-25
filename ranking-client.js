@@ -235,8 +235,8 @@
       const generation = ++this._startGeneration;
       const deadline = Date.now() + (options.timeoutMs || this.timeoutMs);
       if (this._state.pending.length >= 20 || this._state.current?.completed) {
-        await this.flushPending();
-        if (this._state.pending.length >= 20 || this._state.current?.completed) throw new RankingError('QUEUE_FULL', '등록 대기 기록을 먼저 연결해 보내 주세요. 보관한 기록은 그대로 두고 연습 모드로 플레이해요.', 409);
+        this.flushPending().catch(()=>{});
+        throw new RankingError('QUEUE_FULL', '등록 대기 기록을 보내고 있어요. 이번 판은 연습으로 진행하고, 연결 후 다음 판에서 랭킹에 도전해요.', 409);
       }
       await this.register(undefined, { signal: options.signal, timeoutMs: Math.max(100, deadline - Date.now()) });
       const run = await this._request('/runs', { method: 'POST', data: { level, buddyType }, signal: options.signal,
@@ -380,15 +380,17 @@
       return report;
     }
 
-    async reconnectIdentity({ confirmed = false } = {}) {
+    async reconnectIdentity({ confirmed = false, nickname = '' } = {}) {
       if (!confirmed) throw new RankingError('CONFIRM_RECONNECT', '기존 리그 기록을 따로 보관하고 새 리그 계정을 시작할지 확인해 주세요.', 409);
+      const newName=String(nickname).normalize('NFKC').trim().replace(/ +/g,' ');
+      if (Array.from(newName).length<2||Array.from(newName).length>16||newName.toLowerCase()===this._identity?.player?.nickname?.normalize('NFKC').toLowerCase()) throw new RankingError('INVALID_NICKNAME','기존 계정과 다른 닉네임을 2~16자로 입력해 주세요.',400);
       if (this._reconnecting) return this._reconnecting;
       this._assertWritable();
       if (!this.getRecoveryState().required) throw new RankingError('RECONNECT_NOT_REQUIRED', '현재 리그 계정은 다시 연결할 필요가 없어요.', 409);
       this._startGeneration++; this._accountGeneration++;
       this._reconnecting = (async () => {
         const oldPlayerId = this._identity.player.id;
-        const value = await this._request('/register', { method: 'POST', auth: false, data: { nickname: this._identity.player.nickname } });
+        const value = await this._request('/register', { method: 'POST', auth: false, data: { nickname: newName } });
         if (!validIdentity({ token: value.token, player: value.player })) throw new RankingError('INVALID_RESPONSE', '새 리그 계정을 확인하지 못했어요.');
         this._assertWritable();
         if (this._identity.player.id !== oldPlayerId) throw new RankingError('ACCOUNT_CHANGED', '계정이 바뀌어 연결을 다시 확인해 주세요.', 409);
