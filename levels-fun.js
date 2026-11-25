@@ -25,7 +25,7 @@
  44:{moves:33,objectives:goal(1,25),buds:[],terrain:frost([[1,2],[2,3,2],[3,2,2],[4,3]]),delivery:delivery(0,5),recommendedSkill:'양쪽 끝 씨앗과 중앙 서리를 함께 공략하세요. 피버도 활용해요.'},
  45:{moves:34,objectives:goal(3,25),buds:[],terrain:crate([[1,0,2],[1,5,2],[2,2,2],[3,3,2],[4,0],[4,5]]),delivery:delivery(0,2,5),recommendedSkill:'세 개의 씨앗을 모두 전달하세요. 막힌 상자를 먼저 열고 세로 팡빛으로 길을 내요.'},
  47:{moves:32,objectives:goal(4,25),buds:[],terrain:[...crate([[2,0],[3,5],[4,2,2],[4,3,2]]),...frost([[1,1],[1,4]])],delivery:delivery(2,3),recommendedSkill:'인접 상자와 직접 서리를 구분하고 두 씨앗을 끝까지 보내요.'},
- 48:{moves:33,objectives:goal(0,24),terrain:frost([[0,1],[0,4],[5,1,2],[5,4,2]]),delivery:delivery(2),recommendedSkill:'봉오리와 서리를 깨우면서 중앙 씨앗을 내려요. 큰 연쇄를 만들수록 효율적이에요.'},
+ 48:{moves:34,objectives:goal(0,22),buds:[[1,2],[1,3],[2,1],[3,4],[4,2],[4,3]].map(([r,c])=>({r,c,hp:1})),terrain:frost([[0,1],[0,4],[5,1,2],[5,4,2]]),delivery:delivery(2),recommendedSkill:'봉오리와 서리를 깨우면서 중앙 씨앗을 내려요. 큰 연쇄를 만들수록 효율적이에요.'},
  49:{moves:34,objectives:goal(1,24),buds:[],terrain:[...crate([[1,0,2],[1,5,2],[4,0,2],[4,5,2]]),...frost([[2,2,2],[3,3,2]])],delivery:delivery(1,4),recommendedSkill:'등대로 가는 두 씨앗 길을 열어요. 무지개와 특수 팡빛을 조합해 보세요.'},
  50:{moves:36,objectives:goal(0,28),buds:[],terrain:[...crate([[1,1,2],[1,4,2],[4,1,2],[4,4,2]]),...frost([[2,2,2],[3,3,2]])],delivery:delivery(0,3,5),recommendedSkill:'마지막 세 씨앗을 등대로 보내요. 상자·서리·수집을 동시에 해결하며 축제를 완성하세요.'}
  };
