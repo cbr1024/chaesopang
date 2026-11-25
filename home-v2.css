@@ -67,3 +67,91 @@ body[data-v2-screen=home] .page-footer,body[data-v2-screen=garden] .page-footer{
   .mission-bar{gap:5px;padding-inline:8px}
   .v2-terrain{border-radius:10px}
 }
+
+/* Commercial polish: one warm, high-contrast mobile hierarchy. */
+:root{--v2-primary:#3f794d;--v2-primary-dark:#32633f;--v2-ink:#365541;--v2-muted:#526b54;--v2-cream:#fffdf2}
+.v2-home .v2-kicker,.v2-wallet small,.v2-next small,.v2-location,.v2-slot-heading small,.v2-item span{font-size:12px;color:#516b52}
+.v2-wallet>span{padding:10px 8px;gap:3px 5px}
+.v2-wallet small{white-space:normal;line-height:1.2}
+.v2-play{background:linear-gradient(180deg,#52865a,#3d724b);border-color:#3b7248;box-shadow:0 4px 0 #305d3b,0 9px 19px #45683b26}
+.v2-play small{font-size:12px;color:#fff9e6}
+.v2-play:active{box-shadow:0 2px 0 #305d3b}
+.v2-home button:focus-visible,.v2-nav button:focus-visible,.v2-home-back:focus-visible,.v2-wardrobe button:focus-visible{outline:3px solid #69874a;outline-offset:3px}
+.v2-home .v2-nav button,.v2-nav button{min-height:48px}
+.v2-friend-portrait{position:relative;display:block;width:100%;height:100%;aspect-ratio:1;isolation:isolate}
+.v2-friend-portrait>.spirit-svg{display:block;width:100%;height:100%}
+.v2-worn-item{position:absolute;width:31%;height:31%;right:0;bottom:4%;z-index:3;filter:drop-shadow(0 2px 1px #4c574b30);pointer-events:none}
+.v2-worn-item svg{display:block;width:100%;height:100%}
+.v2-cast>.v2-friend-portrait{height:auto;width:35%}
+.v2-friend-card{display:flex;align-items:center;gap:10px;width:100%;margin:13px 0 0;padding:10px 13px;text-align:left;color:#3e6248;background:linear-gradient(135deg,#fffdf5,#f0f7e7);border:1px solid #dbe6ce;border-radius:19px;box-shadow:0 3px 0 #d9e7cd88}
+.v2-friend-card>.v2-friend-portrait{width:61px;height:61px;flex-shrink:0}
+.v2-friend-card>span:nth-child(2){flex:1;min-width:0}
+.v2-friend-card strong{display:block;font-size:18px;margin:2px 0;line-height:1.2}
+.v2-friend-card small{display:block;color:#536d52;font-size:12px;line-height:1.45;word-break:keep-all}
+.v2-friend-card>b{font-size:25px;color:#74926b}
+.v2-wardrobe{background:#f2f6e8;border:1px solid #dce7d1;border-radius:17px;margin:12px 0;padding:13px;text-align:left;color:#3d6546}
+.v2-wardrobe-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.v2-wardrobe-heading strong{font-size:16px}.v2-wardrobe-heading span{font-size:13px;font-weight:700;color:#67845d}
+.v2-wardrobe p,#friend-feedback{font-size:13px!important;line-height:1.5!important;color:#536e53!important;margin:8px 0!important;word-break:keep-all}
+.v2-wardrobe-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.v2-wardrobe-item{border:1px solid #dbe5cf;border-radius:13px;background:#fffef5;min-height:100px;min-width:0;display:flex;align-items:center;flex-direction:column;gap:4px;padding:10px 5px;color:#41674b}
+.v2-wardrobe-item .wardrobe-art{width:42px;height:42px;filter:drop-shadow(0 2px 1px #47644817)}
+.v2-wardrobe-item strong{font-size:12px;line-height:1.35;word-break:keep-all}
+.v2-wardrobe-item small{font-size:12px;color:#567655}
+.v2-wardrobe-item.equipped{border:2px solid #7da873;background:#e3f1d9}
+.v2-wardrobe-item:disabled{background:#eeeee5;color:#747b68;opacity:.75}
+.v2-greet{width:100%;min-height:44px;display:flex;align-items:center;justify-content:center;gap:7px;margin-top:10px;border:1px solid #c9dcbf;background:#fffdf3;border-radius:12px;color:#42724b;font-size:13px;font-weight:700}
+.v2-greet .icon{width:17px;height:17px;color:#d58591}
+.v2-reward-ceremony{margin:13px 0;padding:13px 12px;background:linear-gradient(135deg,#fff9de,#f0f6df 72%);border:1px solid #dce6bf;border-radius:19px;color:#416346;text-align:left;box-shadow:0 3px 0 #dce8c7aa;animation:v2-reward-enter .42s cubic-bezier(.18,.72,.24,1) both}
+.v2-reward-head{display:flex;align-items:center;gap:10px;min-width:0}
+.v2-seed-medal{width:45px;height:45px;flex-shrink:0;display:grid;place-items:center;background:radial-gradient(circle at 30% 18%,#fffbe2,#d4e5a6);border:2px solid #fff9d8;border-radius:50%;color:#699649;box-shadow:0 2px 0 #b8cd8f}
+.v2-seed-medal .icon{width:25px;height:25px}
+.v2-reward-head>div{flex:1;min-width:0}.v2-reward-head small{display:block;font-size:12px;line-height:1.35;color:#506f4c}
+.v2-reward-head strong{display:block;font-size:24px;color:#3c713d;font-weight:850;line-height:1.2;margin-top:2px}
+.v2-reward-total{font-size:12px;font-weight:700;color:#546e50;white-space:nowrap}
+.v2-reward-parts{display:flex;flex-wrap:wrap;gap:5px;margin-top:11px}
+.v2-reward-parts span{font-size:12px;padding:5px 7px;border-radius:8px;background:#fffef1;color:#4e6849}
+.v2-reward-parts b{color:#36703d}
+.v2-reward-note{font-size:12px!important;color:#546b51!important;line-height:1.5!important;margin:9px 0 0!important}
+.v2-keepsake-unlock{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:9px}
+.v2-keepsake-unlock>span{display:flex;flex-direction:column;gap:3px;align-items:center;text-align:center;background:#fffef4;border:1px solid #e3e9d0;border-radius:10px;padding:7px;color:#41664a;font-size:12px}
+.v2-keepsake-unlock svg{width:35px;height:35px}.v2-keepsake-unlock small{font-size:11px}
+.v2-result-save{font-size:12px!important;color:#4d7351!important;line-height:1.4!important;margin:7px 0!important}
+.v2-result-details{margin:9px 0;text-align:left;border:1px solid #dce7d2;border-radius:13px;padding:0 10px;background:#fbfcf2}
+.v2-result-details>summary{min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:5px;color:#47694b;font-size:13px;font-weight:700;cursor:pointer}
+.v2-result-details>summary::after{content:'＋'}.v2-result-details[open]>summary::after{content:'−'}
+.v2-storage-warning{display:flex;align-items:center;gap:8px;justify-content:space-between;width:min(100%,440px);margin:0 auto 8px;padding:8px 10px;background:#fff5dc;border:1px solid #dabb84;border-radius:12px;font-size:13px;color:#774e28}
+.v2-storage-warning button{border:1px solid #d4b879;background:#fffef3;border-radius:9px;min-height:44px;padding:7px 9px;color:#76552b;font-weight:700;flex-shrink:0}
+@keyframes v2-reward-enter{from{opacity:0;transform:translateY(8px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+@media(max-width:520px){
+  .app-header{padding-inline:1px}
+  .app-header .icon-button,.v2-home-back{min-width:44px;min-height:44px}
+  .app-header .header-note{display:none}
+  body[data-v2-screen=home] #header-ranking,body[data-v2-screen=garden] #header-ranking,body[data-v2-screen=play] #header-ranking{display:none}
+  body[data-v2-screen=home] #stars-button,body[data-v2-screen=garden] #stars-button,body[data-v2-screen=play] #stars-button{display:none}
+  body[data-v2-screen=play] .game{display:flex;flex-direction:column}
+  body[data-v2-screen=play] .stage-heading{order:0}
+  body[data-v2-screen=play] .mission-bar{order:1}
+  body[data-v2-screen=play] .score-rail{order:2}
+  body[data-v2-screen=play] .board-wrap{order:3}
+  body[data-v2-screen=play] .fever-strip{order:4}
+  body[data-v2-screen=play] .boosters{order:5}
+  body[data-v2-screen=play] .finish-dock{order:5}
+  body[data-v2-screen=play] .play-hint{order:6;min-height:28px}
+  body[data-v2-screen=play] .companion-strip{order:7;min-height:44px;height:auto}
+  body[data-v2-screen=play] .promise-strip{order:8;min-height:44px}
+  body[data-v2-screen=play] .score-guidance{order:9}
+  body[data-v2-screen=play] .stage-heading .rank-mode,body[data-v2-screen=play] .stage-heading .chapter-label{min-height:44px}
+  body[data-v2-screen=play] .stat-label,body[data-v2-screen=play] .play-hint{font-size:12px!important}
+  body[data-v2-screen=play] .mission-bar{margin-bottom:3px}
+  .v2-home .v2-wallet small{font-size:11px}
+  .result-modal .modal-actions .secondary-button{font-size:12px;min-height:44px}
+}
+@media(max-height:650px) and (max-width:520px){
+  body[data-v2-screen=play] .stage-heading{margin-bottom:4px}
+  body[data-v2-screen=play] .stage-heading h1{font-size:19px;margin:3px 0 4px}
+  body[data-v2-screen=play] .score-rail{margin-top:3px;margin-bottom:4px;min-height:27px}
+  body[data-v2-screen=play] .board-wrap{padding:9px}
+  .result-modal{padding:14px 14px 10px;gap:4px}
+}
+@media(prefers-reduced-motion:reduce){.v2-reward-ceremony{animation:none!important}.v2-cast>.v2-friend-portrait{animation:none!important}}
