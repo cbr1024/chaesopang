@@ -327,9 +327,14 @@
         }
         if(node.dataset.kind!==t.kind){
           node.dataset.kind=t.kind;
-          node.innerHTML=t.kind==='weed'?'<svg viewBox="0 0 30 30" aria-hidden="true"><path d="M15 27Q5 18 3 7q12 2 13 14Q14 7 21 2q5 13-2 22Q25 14 28 16q0 8-13 11" fill="#77a45b" stroke="#496c43" stroke-width="1.5" stroke-linejoin="round"/></svg><b></b>':'<svg viewBox="0 0 30 30" aria-hidden="true"><path d="M15 2v26M4 8l22 14M4 22L26 8M10 5l5 4 5-4M10 25l5-4 5 4" fill="none" stroke="#5689b1" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><b></b>';
+          node.innerHTML=t.kind==='crate'?'<svg viewBox="0 0 30 30" aria-hidden="true"><rect x="3" y="3" width="24" height="24" rx="5" fill="#c38e5c" stroke="#78553d" stroke-width="1.6"/><path d="M4 10h22M4 20h22M7 24 23 6" stroke="#98623e" stroke-width="3" stroke-linecap="round"/><path d="M6 5h17M5 7v15" stroke="#f4d4a1" stroke-width="1.5" stroke-linecap="round"/><circle cx="15" cy="15" r="4" fill="#fff0c2" stroke="#93653c"/></svg><b></b>':t.kind==='weed'?'<svg viewBox="0 0 30 30" aria-hidden="true"><path d="M15 27Q5 18 3 7q12 2 13 14Q14 7 21 2q5 13-2 22Q25 14 28 16q0 8-13 11" fill="#77a45b" stroke="#496c43" stroke-width="1.5" stroke-linejoin="round"/></svg><b></b>':'<svg viewBox="0 0 30 30" aria-hidden="true"><path d="M15 2v26M4 8l22 14M4 22L26 8M10 5l5 4 5-4M10 25l5-4 5 4" fill="none" stroke="#5689b1" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><b></b>';
         }
         node.dataset.hp=String(t.hp);node.querySelector('b').textContent=t.hp>1?'2':'';
+      }
+      for(const seed of snapshot.delivery||[]){
+        const key='seed:'+seed.c;keep.add(key);let node=this.terrainNodes.get(key);
+        if(!node){node=document.createElement('span');node.className='v2-delivery-marker';node.setAttribute('aria-hidden','true');node.innerHTML='<svg viewBox="0 0 30 30"><path d="M15 4Q26 15 22 23c-3 6-11 6-14 0Q4 15 15 4Z" fill="#f1c569" stroke="#b47f38" stroke-width="2"/><path d="M15 18V8m0 7 6-4" stroke="#6e8f47" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M11 22l4 4 4-4" fill="none" stroke="#fff5d0" stroke-width="2" stroke-linecap="round"/></svg><b></b>';node.style.left='calc(var(--step) * '+seed.c+' + 2px)';this.terrainLayer.appendChild(node);this.terrainNodes.set(key,node);}
+        node.style.top='calc(var(--step) * '+seed.r+' + 2px)';node.dataset.row=String(seed.r);node.dataset.column=String(seed.c);node.classList.toggle('delivered',seed.r===this.rows-1);node.querySelector('b').textContent=seed.r===this.rows-1?'✓':String(this.rows-1-seed.r);
       }
       for(const [key,node] of this.terrainNodes)if(!keep.has(key)){this.terrainNodes.delete(key);node.remove();}
     }
@@ -350,8 +355,8 @@
         node.dataset.r=String(r); node.dataset.c=String(c);
         node.setAttribute('aria-rowindex',String(r+1)); node.setAttribute('aria-colindex',String(c+1));
         const bud=Number(snapshot.buds?.[r]?.[c]) || 0,terrain=snapshot.terrain?.[r]?.[c];
-        node.dataset.frozen=String(terrain?.kind==='frost');
-        node.setAttribute('aria-label',(r+1)+'행 '+(c+1)+'열, '+root.LumiArt.names[tile.type]+(tile.special?', '+(specialNames[tile.special] || tile.special):'')+(bud?', 꽃봉오리 '+bud+'겹, '+(root.LumiArt.chapterBuds?.[this.chapter-1]||'새싹 봉오리'):'')+(terrain?', '+(terrain.kind==='weed'?'잡초':'서리, 교환 불가')+' '+terrain.hp+'겹':''));
+        node.dataset.frozen=String(['frost','crate'].includes(terrain?.kind));
+        node.setAttribute('aria-label',(r+1)+'행 '+(c+1)+'열, '+root.LumiArt.names[tile.type]+(tile.special?', '+(specialNames[tile.special] || tile.special):'')+(bud?', 꽃봉오리 '+bud+'겹, '+(root.LumiArt.chapterBuds?.[this.chapter-1]||'새싹 봉오리'):'')+(terrain?', '+(terrain.kind==='weed'?'잡초':terrain.kind==='crate'?'상자, 교환 불가':'서리, 교환 불가')+' '+terrain.hp+'겹':'')+((snapshot.delivery||[]).some(s=>s.r===r&&s.c===c)?r===this.rows-1?', 씨앗 전달 완료':', 금빛 씨앗, 아래 '+(this.rows-1-r)+'칸 남음':''));
         node.setAttribute('aria-disabled',String(this.disabled));
         node.tabIndex=same(this._focus,{r,c})?0:-1;
         const active=same(this.selected,{r,c});
@@ -501,9 +506,12 @@
         }
       }
       for(const [hitIndex,hit] of (event.terrainHit||[]).entries())this._cue(82,()=>{
-        const point=this.center(hit.r,hit.c),color=hit.kind==='weed'?'#78aa61':'#75b8dc';
+        const point=this.center(hit.r,hit.c),color=hit.kind==='weed'?'#78aa61':hit.kind==='crate'?'#c28d58':'#75b8dc';
         if(hitIndex<6){if(hit.after)this.fx?.shockwave?.(point.x,point.y,color,{type:0,scale:.55});else this.fx?.burst?.(point.x,point.y,color,1.1,0,8);}
         const n=this.terrainNodes.get(hit.r+':'+hit.c);if(n&&!this.reducedMotion)n.animate([{scale:'1',opacity:1},{scale:'1.13',opacity:.65},{scale:'1',opacity:hit.after?1:.15}],{duration:160,easing:'ease-out'});
+      });
+      for(const hit of event.deliveryHit||[])this._cue(90,()=>{
+        const p=this.center(hit.after,hit.c);if(hit.delivered)this.fx?.shockwave?.(p.x,p.y,'#e7b955',{scale:.8});else this.fx?.burst?.(p.x,p.y,'#e7b955',.8,0,7);
       });
       for(const p of event.bloomedCells || (event.budsHit || []).filter(hit=>!hit.after)) this._cue(95,()=> {
         const point=this.center(p.r,p.c),source=scored.find(cell=>cell.r===p.r&&cell.c===p.c);
@@ -585,7 +593,7 @@
         press.lastTime=now;
       }
       press.lastX=dx;press.lastY=dy;
-      const target=this._swipeTarget(press,dx,dy),frozen=this.snapshot?.terrain?.[press.start.r]?.[press.start.c]?.kind==='frost'||(target&&this.snapshot?.terrain?.[target.r]?.[target.c]?.kind==='frost'),neighbor=frozen?null:this._nodeAt(target);
+      const target=this._swipeTarget(press,dx,dy),frozen=['frost','crate'].includes(this.snapshot?.terrain?.[press.start.r]?.[press.start.c]?.kind)||(target&&['frost','crate'].includes(this.snapshot?.terrain?.[target.r]?.[target.c]?.kind)),neighbor=frozen?null:this._nodeAt(target);
       if(press.neighbor && press.neighbor!==neighbor) {
         press.neighbor.classList.remove('swap-target');
         this._springNode(press.neighbor,this._home(press.neighbor),{duration:290,omega:.032,zeta:.78});
