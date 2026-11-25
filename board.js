@@ -412,14 +412,16 @@
     async clear(event) {
       if(this._disposed) return;
       const epoch=this._epoch,pending=[],removed=event.cells || [],created=event.created || [],activated=event.activated || [];
-      const scored=[...removed,...created],origin=scored[0] || {r:0,c:0}; let x=0,y=0;
+      const scored=[...removed,...created],origin=event.specialComboOrigin||scored[0]||{r:0,c:0}; let x=0,y=0;
+      const burstLimit=this.reducedMotion?4:removed.length>=18?9:removed.length>=9?8:removed.length;
+      const burstIndexes=new Set(Array.from({length:burstLimit},(_,i)=>Math.floor(i*removed.length/Math.max(1,burstLimit))));
       for(const p of scored) { const point=this.center(p.r,p.c); x+=point.x; y+=point.y; }
-      for(const p of removed) {
+      for(const [index,p] of removed.entries()) {
         const node=this.nodes.get(p.tile.id);
         const delay=Math.min(36,Math.hypot(p.r-origin.r,p.c-origin.c)*7);
-        this._cue(82+delay,()=> {
+        if(burstIndexes.has(index))this._cue(82+delay,()=> {
           const point=this.center(p.r,p.c);
-          this.fx?.burst?.(point.x,point.y,root.LumiArt.colors[p.tile.type],Math.min(1.5,.72+(event.combo || 1)*.12),p.tile.type);
+          this.fx?.burst?.(point.x,point.y,root.LumiArt.colors[p.tile.type],Math.min(1.5,.72+(event.combo || 1)*.12),p.tile.type,removed.length>=9?9:undefined);
         });
         if(node) {
           // Keep the original SVG: rebuilding every matched face was a source
@@ -458,7 +460,21 @@
       }
       this._cue(82,()=> {
         this.onCue?.('impact',event);
-        for(const p of activated) {
+        const combo=event.specialCombo,combined=event.specialComboOrigin;
+        if(combo&&combined){
+          const center=this.center(combined.r,combined.c),ink='#efd27c';
+          if(combo==='line-line'){
+            this.fx?.beam?.(center.x,center.y,'row',ink);
+            this.fx?.beam?.(center.x,center.y,'col',ink);
+          }else if(combo==='line-bomb'){
+            for(let d=-1;d<=1;d++){
+              if(combined.r+d>=0&&combined.r+d<this.rows){const p=this.center(combined.r+d,combined.c);this.fx?.beam?.(p.x,p.y,'row',ink);}
+              if(combined.c+d>=0&&combined.c+d<this.cols){const p=this.center(combined.r,combined.c+d);this.fx?.beam?.(p.x,p.y,'col',ink);}
+            }
+          }else this.fx?.shockwave?.(center.x,center.y,ink,{rainbow:combo.startsWith('rainbow'),scale:combo==='bomb-bomb'?1.6:1.25});
+        }
+        const ingredients=event.specialComboIngredients||[];
+        for(const p of activated.filter(p=>!ingredients.some(q=>same(q,p))).slice(0,this.reducedMotion?2:6)) {
           const point=this.center(p.r,p.c);
           if(p.tile.special==='row'||p.tile.special==='col') this.fx?.beam?.(point.x,point.y,p.tile.special,root.LumiArt.colors[p.tile.type]);
           else this.fx?.shockwave?.(point.x,point.y,root.LumiArt.colors[p.tile.type],{type:p.tile.type,rainbow:p.tile.special==='rainbow'});
@@ -484,9 +500,9 @@
           }));
         }
       }
-      for(const hit of event.terrainHit||[])this._cue(82,()=>{
+      for(const [hitIndex,hit] of (event.terrainHit||[]).entries())this._cue(82,()=>{
         const point=this.center(hit.r,hit.c),color=hit.kind==='weed'?'#78aa61':'#75b8dc';
-        if(hit.after)this.fx?.shockwave?.(point.x,point.y,color,{type:0});else this.fx?.burst?.(point.x,point.y,color,1.1,0);
+        if(hitIndex<6){if(hit.after)this.fx?.shockwave?.(point.x,point.y,color,{type:0,scale:.55});else this.fx?.burst?.(point.x,point.y,color,1.1,0,8);}
         const n=this.terrainNodes.get(hit.r+':'+hit.c);if(n&&!this.reducedMotion)n.animate([{scale:'1',opacity:1},{scale:'1.13',opacity:.65},{scale:'1',opacity:hit.after?1:.15}],{duration:160,easing:'ease-out'});
       });
       for(const p of event.bloomedCells || (event.budsHit || []).filter(hit=>!hit.after)) this._cue(95,()=> {
@@ -569,7 +585,7 @@
         press.lastTime=now;
       }
       press.lastX=dx;press.lastY=dy;
-      const target=this._swipeTarget(press,dx,dy),neighbor=this._nodeAt(target);
+      const target=this._swipeTarget(press,dx,dy),frozen=this.snapshot?.terrain?.[press.start.r]?.[press.start.c]?.kind==='frost'||(target&&this.snapshot?.terrain?.[target.r]?.[target.c]?.kind==='frost'),neighbor=frozen?null:this._nodeAt(target);
       if(press.neighbor && press.neighbor!==neighbor) {
         press.neighbor.classList.remove('swap-target');
         this._springNode(press.neighbor,this._home(press.neighbor),{duration:290,omega:.032,zeta:.78});
@@ -578,8 +594,8 @@
       const along=press.axis==='x'?dx:dy,sign=Math.sign(along),amount=Math.abs(along),limit=this.step;
       const travel=neighbor
         ? sign*(amount<=limit?amount:limit+limit*.14*(1-Math.exp(-(amount-limit)/(limit*.28))))
-        : sign*limit*.22*(1-Math.exp(-amount/(limit*.22)));
-      const cross=clamp((press.axis==='x'?dy:dx)*.12,-this.step*.1,this.step*.1);
+        : sign*limit*(frozen?.08:.22)*(1-Math.exp(-amount/(limit*.22)));
+      const cross=frozen?0:clamp((press.axis==='x'?dy:dx)*.12,-this.step*.1,this.step*.1);
       const base=this._position(press.start.r,press.start.c);
       const desired=pose(base.x+(press.axis==='x'?travel:cross),base.y+(press.axis==='y'?travel:cross)-3.5,1.055,1.055,
         press.axis==='x'?clamp(travel/this.step*2.2,-2.2,2.2):0);
