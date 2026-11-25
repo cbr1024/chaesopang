@@ -155,3 +155,20 @@ body[data-v2-screen=home] .page-footer,body[data-v2-screen=garden] .page-footer{
   .result-modal{padding:14px 14px 10px;gap:4px}
 }
 @media(prefers-reduced-motion:reduce){.v2-reward-ceremony{animation:none!important}.v2-cast>.v2-friend-portrait{animation:none!important}}
+
+/* Real 320x568 capture: prioritize the booster controls before the optional fever explanation. */
+.v2-placed>.v2-empty-placement{visibility:hidden}
+.v2-landscape{background:radial-gradient(ellipse at 72% 12%,#fff5c6 0%,transparent 45%),linear-gradient(155deg,#d9edcc,#f5ecd0);border-color:#fffef3;box-shadow:0 5px 0 #c8dcb9,0 12px 24px #577c4220}
+.v2-landscape::after{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 0 0 1px #acc39d45,inset 0 2px 0 #ffffffb0;pointer-events:none;z-index:4}
+.v2-landmark svg{filter:saturate(1.09) contrast(1.04)}
+.v2-cast{width:57%;bottom:8%;left:3%}
+.v2-placed{width:46%;right:2%;bottom:10%}
+.v2-cast>span{filter:drop-shadow(0 5px 2px #43623f32)}
+@media(max-height:650px) and (max-width:520px){
+  body[data-v2-screen=play] .boosters{order:4;margin-top:5px;min-height:48px}
+  body[data-v2-screen=play] .fever-strip{order:5}
+  body[data-v2-screen=play] .finish-dock{order:4}
+  body[data-v2-screen=play] .stage-heading .stage-meta{gap:4px}
+  body[data-v2-screen=play] .mission-bar{padding-block:7px}
+  body[data-v2-screen=play] .board-wrap{margin-bottom:2px}
+}
