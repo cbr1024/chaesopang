@@ -110,6 +110,7 @@
     const ended=game && (game.won || game.over);
     view.setDisabled(sessionInterrupted || busy || screen!=='play' || Boolean(modalType) || ended);
     view.setBlastMode(blastMode);
+    $('v2-home-back').disabled=busy || backupBusy || recoveryBusy;
     $('hint-button').disabled=busy || ended;
     $('shuffle-button').disabled=busy || ended || shuffles<1;
     $('blast-button').disabled=busy || ended || blasts<1;
@@ -582,7 +583,7 @@
     clearHints();controls();
     if(playing){view.measure();if(game)view.render(game.snapshot());scheduleHint();if(focus&&!modalType)view.focusAt({r:0,c:0});}
     else{renderHome();if(focus)$('v2-heading')?.focus({preventScroll:true});}
-    window.scrollTo({top:0,behavior:'instant'});
+    window.scrollTo({top:0,behavior:'auto'});
   }
   function homeMessage(message){const n=$('v2-home').querySelector('.v2-home-status');if(n)n.textContent=message;}
   function applyGarden(op,id){
@@ -591,7 +592,7 @@
     const result=op==='purchase'?LumiGarden.purchase(profile,id):op==='equip'?LumiGarden.equip(profile,id):LumiGarden.unequip(profile,item.slot);
     if(!result.ok){homeMessage(result.code==='INSUFFICIENT'?'햇살씨앗이 더 필요해요.':'아직 꾸밀 수 없는 소품이에요.');return;}
     const previous=profile.garden;profile.garden=result.garden;
-    if(!persist()){profile.garden=previous;homeMessage('저장하지 못했어요. 소품과 씨앗은 그대로예요.');return;}
+    if(!persist()){profile.garden=previous;const msg='저장하지 못했어요. 소품과 씨앗은 그대로예요.';if(modalType==='garden-item')$('garden-purchase-status').textContent=msg;else homeMessage(msg);return;}
     if(modalType)closeModal();renderHome();homeMessage(op==='unequip'?'소품을 보관했어요.':item.name+'을(를) 배치했어요!');audio.play('collect');
   }
   function homeAct(action,value){
@@ -608,7 +609,7 @@
     const item=LumiGarden.catalog.find(i=>i.id===id);if(!item){closeModal();return;}
     const summary=LumiGarden.summary(profile);
     modalHeader('SUNPATCH DECORATION',item.name,'happy',null);
-    $('modal-content').innerHTML='<div class="v2-item-preview">'+LumiHome.decoration(item)+'</div><p>햇살씨앗 '+item.price+'개로 소품을 얻어요.<br>한 번 얻으면 언제든 무료로 배치하거나 보관할 수 있어요.</p><p>현재 '+summary.balance+'개 · 구매 후 '+Math.max(0,summary.balance-item.price)+'개</p>';
+    $('modal-content').innerHTML='<div class="v2-item-preview">'+LumiHome.decoration(item)+'</div><p>햇살씨앗 '+item.price+'개로 소품을 얻어요.<br>한 번 얻으면 언제든 무료로 배치하거나 보관할 수 있어요.</p><p>현재 '+summary.balance+'개 · 구매 후 '+Math.max(0,summary.balance-item.price)+'개</p><p id="garden-purchase-status" role="status"></p>';
     modalButton(item.price+' 씨앗으로 얻고 배치하기',()=>applyGarden('purchase',id),true);modalButton('조금 더 둘러보기',closeModal);
   }
   function openGarden(id,ranked=false) { closeModal();setScreen('play',false);startGarden(id,null,{ranked}).then(()=>{if(!modalType&&screen==='play')view.focusAt({r:0,c:0});}); }
@@ -698,7 +699,7 @@
     } else if(rankSubmission?.status==='error') {
       panel.innerHTML=icon('help')+'<div><strong>이번 기록을 등록하지 못했어요</strong><small>'+esc(rankSubmission.error?.message||'정원 기록은 이 기기에 남아 있어요.')+'</small></div>';
     } else {
-      panel.innerHTML=icon('flower')+'<div><strong>이 기기에 남긴 정원 기록</strong><small>'+(rankRun?'정원을 완성하면 랭킹에 도전할 수 있어요.':'연결된 상태에서 새 정원을 시작하면 랭킹에 참여해요.')+'</small></div>';
+      panel.innerHTML=icon('flower')+'<div><strong>이 기기에 남긴 정원 기록</strong><small>'+(rankRun?'정원을 완성하면 랭킹에 도전할 수 있어요.':'경쟁 메뉴에서 랭킹 도전을 선택하면 서버 검증 순위에 참여할 수 있어요.')+'</small></div>';
     }
   }
   async function retryRankings() {
@@ -807,7 +808,7 @@
         const name=$('nickname-input').value.normalize('NFKC').trim().replace(/ +/g,' ');
         if(Array.from(name).length<2||Array.from(name).length>16){status.textContent='닉네임은 2~16자로 입력해 주세요.';return;}
         await ranking.register(name);
-        updateRankStatus();
+        updateRankStatus();if(screen!=='play')renderHome();
         if(modalType==='ranking'&&request===rankRequest){showModal('ranking');toast('다음 판부터 랭킹 기록에 도전할 수 있어요.',3500);}
       }catch(error){if(status.isConnected)status.textContent=error.code==='NICKNAME_TAKEN'?'이미 사용 중인 닉네임이에요. 다른 이름을 입력해 주세요.':error.message||'가입에 실패했어요. 다시 연결해 주세요.';}
       finally{if(button.isConnected)button.disabled=false;}
