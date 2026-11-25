@@ -16,7 +16,7 @@
 <link rel="stylesheet" href="world.css?v=a834908674b3">
 <link rel="stylesheet" href="plush.css?v=2ea826fd6e73">
 <link rel="stylesheet" href="accessibility.css?v=3">
-<link rel="stylesheet" href="home-v2.css?v=2">
+<link rel="stylesheet" href="home-v2.css?v=3">
 <script defer src="game-config.js?v=ranking-6000ms-1"></script>
 <script defer src="session-guard.js?v=b33599a50396"></script>
 <script defer src="mobile.js?v=98b180e52177"></script>
@@ -24,19 +24,20 @@
 <script defer src="story.js?v=77beab0aebc6"></script>
 <script defer src="rewards.js?v=16728dfb0493"></script>
 <script defer src="engine.js?v=97592a96c308"></script>
-<script defer src="engine-v2.js?v=1"></script>
+<script defer src="engine-v2.js?v=2"></script>
 <script defer src="levels.js?v=dd3c74c90339"></script>
 <script defer src="levels-v2.js?v=1"></script>
 <script defer src="hints.js?v=34e547503c19"></script>
 <script defer src="journey.js?v=a64b63b28b61"></script>
-<script defer src="garden-economy.js?v=1"></script>
-<script defer src="progress.js?v=v2-terrain-1"></script>
-<script defer src="effects.js?v=d73dd7293107"></script>
-<script defer src="board.js?v=v2-terrain-1"></script>
+<script defer src="garden-economy.js?v=2"></script>
+<script defer src="wardrobe.js?v=1"></script>
+<script defer src="progress.js?v=v2-polish-1"></script>
+<script defer src="effects.js?v=v2-combos-1"></script>
+<script defer src="board.js?v=v2-polish-1"></script>
 <script defer src="ranking-client.js?v=v2-nickname-1"></script>
 <script defer src="account-backup.js?v=3"></script>
-<script defer src="home-v2.js?v=2"></script>
-<script defer src="app.js?v=v2-campaign-1"></script>
+<script defer src="home-v2.js?v=3"></script>
+<script defer src="app.js?v=v2-quality-1"></script>
 </head>
 <body>
   <svg class="icon-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
@@ -84,6 +85,7 @@
       <button class="icon-button" id="settings-button" aria-label="설정" title="설정"><svg class="icon"><use href="#i-settings"/></svg></button>
     </nav>
   </header>
+  <div class="v2-storage-warning" id="v2-storage-warning" role="alert" hidden><span>기록이 아직 저장되지 않았어요.</span><button type="button" id="v2-storage-retry">다시 저장</button></div>
   <main id="v2-home" class="v2-home" hidden aria-label="햇살밭 홈"></main>
   <main class="game-layout" id="v2-playfield">
     <aside class="friend-side" aria-label="함께하는 친구">
