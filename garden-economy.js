@@ -22,12 +22,13 @@
     return [0,1].map(n=>Object.freeze({id:p.id+'-'+(n+1),slot:p.id,chapter:p.chapter,name:d[n+1],kind:d[n+3],color:colors[0],accent:colors[1],price:[[15,25],[20,35],[30,50]][p.step-1][n]}));
   }));
   const lookup=new Map(catalog.map(i=>[i.id,i]));
-  const earned=profile=>{
+  const earnedParts=profile=>{
     const stars=Array.from({length:50},(_,i)=>Number.isInteger(profile?.stars?.[i])?Math.max(0,Math.min(3,profile.stars[i])):0);
-    return stars.filter(n=>n>0).length*10+stars.reduce((a,b)=>a+b,0)*2+
-      stars.filter((n,i)=>n>0&&profile?.journey?.stamps?.[i]===true).length*5+
-      Array.from({length:5},(_,i)=>stars.slice(i*10,i*10+10).every(n=>n>0)?20:0).reduce((a,b)=>a+b,0);
+    return {clears:stars.filter(n=>n>0).length*10,stars:stars.reduce((a,b)=>a+b,0)*2,
+      promises:stars.filter((n,i)=>n>0&&profile?.journey?.stamps?.[i]===true).length*5,
+      chapters:Array.from({length:5},(_,i)=>stars.slice(i*10,i*10+10).every(n=>n>0)?20:0).reduce((a,b)=>a+b,0)};
   };
+  const earned=profile=>Object.values(earnedParts(profile)).reduce((a,b)=>a+b,0);
   const unlockedSlots=profile=>new Set(Journey.restorationSummary(profile).flatMap(c=>c.projects.filter(p=>p.state==='restored').map(p=>p.id)));
   function normalize(value,profile){
     const valid=value&&value.version===VERSION;
@@ -66,5 +67,5 @@
     const state=summary(profile),equipped={...state.garden.equipped};delete equipped[slot];
     return {ok:true,garden:{...state.garden,equipped}};
   }
-  return Object.freeze({VERSION,catalog,earned,normalize,summary,purchase,equip,unequip,unlockedSlots});
+  return Object.freeze({VERSION,catalog,earned,earnedParts,normalize,summary,purchase,equip,unequip,unlockedSlots});
 });
