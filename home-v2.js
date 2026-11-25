@@ -5,7 +5,7 @@
   const icon=id=>'<svg class="icon" aria-hidden="true"><use href="#i-'+id+'"/></svg>';
   let serial=0;
   function decoration(item){
-    const c=item.color,a=item.accent,sh='#6b7955';
+    const id='decoration-'+(++serial),c='url(#'+id+'-c)',a='url(#'+id+'-a)',sh='#6b7955';
     const paths={
       flowers:'<path d="M18 60Q40 45 78 60L73 69H22Z" fill="'+a+'"/>'+[24,43,65].map((x,i)=>'<path d="M'+x+' 58v-'+(20+i*3)+'" stroke="'+sh+'" stroke-width="3" stroke-linecap="round"/><circle cx="'+x+'" cy="'+(34-i*3)+'" r="10" fill="'+c+'" stroke="#fff9e8" stroke-width="2"/><circle cx="'+x+'" cy="'+(34-i*3)+'" r="3.5" fill="#f3cc68"/>').join(''),
       stone:'<path d="M16 64Q45 28 82 62L75 72H20Z" fill="'+a+'"/><g fill="'+c+'" stroke="#fff9e8" stroke-width="2"><ellipse cx="29" cy="59" rx="12" ry="7"/><ellipse cx="51" cy="48" rx="13" ry="8"/><ellipse cx="73" cy="60" rx="12" ry="7"/></g>',
@@ -14,7 +14,11 @@
       lantern:'<path d="M50 16v10M50 61v13M34 74h32" stroke="'+sh+'" stroke-width="4" stroke-linecap="round"/><rect x="34" y="27" width="32" height="34" rx="9" fill="'+c+'" stroke="'+a+'" stroke-width="3"/><path d="M42 34v19M57 34v19" stroke="#fff6d6" stroke-width="5" stroke-linecap="round"/><path d="m28 30 22-11 22 11Z" fill="'+a+'"/>',
       ribbon:'<path d="M18 22v52M82 22v52M18 26Q50 48 82 26" fill="none" stroke="'+sh+'" stroke-width="3" stroke-linecap="round"/><path d="m25 30 13 4-11 15Z" fill="'+c+'"/><path d="m43 36 14 0-7 17Z" fill="#e9c56c"/><path d="m62 34 13-4-1 19Z" fill="'+a+'"/>'
     };
-    return '<svg viewBox="0 0 100 88" aria-hidden="true"><ellipse cx="50" cy="76" rx="36" ry="7" fill="#59764d" opacity=".14"/>'+paths[item.kind]+'</svg>';
+    return '<svg viewBox="0 0 100 88" aria-hidden="true"><defs><linearGradient id="'+id+'-c" x1="0" y1="0" x2=".8" y2="1"><stop stop-color="#fff1d9"/><stop offset=".35" stop-color="'+item.color+'"/><stop offset="1" stop-color="'+item.accent+'"/></linearGradient><linearGradient id="'+id+'-a" x1="0" y1="0" x2="0" y2="1"><stop stop-color="'+item.color+'"/><stop offset="1" stop-color="'+item.accent+'"/></linearGradient></defs><ellipse cx="50" cy="76" rx="36" ry="7" fill="#59764d" opacity=".18"/>'+paths[item.kind]+'</svg>';
+  }
+  function portrait(profile,type,mood='happy'){
+    const id='v2-friend-'+(++serial),item=root.LumiWardrobe.selected(profile,type);
+    return '<span class="v2-friend-portrait">'+root.LumiArt.sprite(type,id,mood)+(item?'<span class="v2-worn-item">'+root.LumiWardrobe.illustration(item,id)+'</span>':'')+'</span>';
   }
   function render(node,{profile,level,definition,active,busy,ranked,identity,view='home',chapter,act}){
     const summary=root.LumiGarden.summary(profile),all=root.LumiJourney.restorationSummary(profile);
@@ -24,8 +28,9 @@
     const equipped=region.projects.map(p=>itemMap.get(summary.garden.equipped[p.id])).filter(Boolean);
     const def=definition||root.LumiLevelsV2[level-1],buddy=profile.selectedBuddy;
     const title=view==='garden'?'나의 햇살밭':'오늘도, 햇살 한 줌';
+    const character=root.LumiArt.characters[buddy],tier=root.LumiWardrobe.tier(profile,buddy),nextGift=root.LumiWardrobe.next(profile,buddy),saidHello=root.LumiWardrobe.normalize(profile.wardrobe,profile).greetings[buddy]===root.LumiWardrobe.today();
     const next=region.projects.find(p=>p.state!=='restored');
-    const hero='<div class="v2-landscape"><div class="v2-landmark">'+root.LumiArt.landmark(actual,region.restored,'v2-land-'+(++serial),region.projects.map(p=>p.state==='restored'),Boolean(profile.stars[actual*10-1]))+'</div><div class="v2-cast">'+[buddy,(buddy+1)%6,(buddy+3)%6].map((t,i)=>'<span>'+root.LumiArt.sprite(t,'v2-friend-'+(++serial),'happy')+'</span>').join('')+'</div><div class="v2-placed">'+equipped.map(i=>'<span title="'+esc(i.name)+'">'+decoration(i)+'</span>').join('')+'</div><span class="v2-location">'+icon('leaf')+esc(root.LumiLevels.chapters[actual-1].title)+' · '+region.restored+'/3 복원</span></div>';
+    const hero='<div class="v2-landscape"><div class="v2-landmark">'+root.LumiArt.landmark(actual,region.restored,'v2-land-'+(++serial),region.projects.map(p=>p.state==='restored'),Boolean(profile.stars[actual*10-1]))+'</div><div class="v2-cast">'+[buddy,(buddy+1)%6,(buddy+3)%6].map(t=>portrait(profile,t)).join('')+'</div><div class="v2-placed">'+equipped.map(i=>'<span title="'+esc(i.name)+'">'+decoration(i)+'</span>').join('')+'</div><span class="v2-location">'+icon('leaf')+esc(root.LumiLevels.chapters[actual-1].title)+' · '+region.restored+'/3 복원</span></div>';
     const header='<div class="v2-intro"><span class="v2-kicker">SUNPATCH · 채소팡</span><h1 tabindex="-1" id="v2-heading">'+title+'</h1><p>'+ (view==='garden'?'퍼즐에서 모은 햇살씨앗으로 우리만의 풍경을 만들어요.':'작은 팡빛을 모아 친구들과 정원을 가꿔요.')+'</p></div><div class="v2-wallet"><span>'+icon('star')+'<b>'+profile.stars.reduce((a,b)=>a+b,0)+'</b><small>별</small></span><span>'+icon('leaf')+'<b>'+summary.balance+'</b><small>햇살씨앗</small></span><span>'+icon('flower')+'<b>'+all.reduce((n,c)=>n+c.restored,0)+'/15</b><small>복원</small></span></div>';
     let content;
     if(view==='garden'){
@@ -39,6 +44,7 @@
     }else{
       content=hero+'<div class="v2-next"><div><small>'+(fresh?'첫 모험':active?'이어갈 퍼즐':complete===50?'마지막 정원':'다음 모험')+'</small><h2>'+String(def.id).padStart(2,'0')+' · '+esc(def.title)+'</h2><p>'+esc(def.recommendedSkill)+'</p></div><button class="v2-map" data-action="map" aria-label="50개 스테이지 지도">'+icon('map')+'지도</button></div><button class="v2-play" data-action="play" '+(busy?'disabled':'')+'>'+icon('play')+'<span>'+(fresh?'첫 퍼즐 시작':active?'이어서 놀기':complete===50?'최고 기록에 도전':'다음 퍼즐 시작')+'<small>'+(ranked?'이전 랭킹 판 이어하기':'가입 없이 · 기기 저장')+'</small></span><b>›</b></button>'+
         '<div class="v2-section-title"><h2>오늘의 작은 목표</h2><span>'+complete+'/50 클리어</span></div><div class="v2-progress"><span style="width:'+complete/50*100+'%"></span></div><div class="v2-goal"><span>'+icon('flower')+'</span><div><strong>'+esc(next?.name||'정원 꾸미기')+'</strong><small>'+esc(next?'복원 조건을 확인하고 햇살밭을 밝혀요.':'모은 소품으로 풍경을 바꾸어 보세요.')+'</small></div><button data-action="garden">보기 ›</button></div>'+
+        '<button class="v2-friend-card" data-action="friend">'+portrait(profile,buddy,saidHello?'happy':'wink')+'<span><small>함께하는 친구 · Lv.'+tier+'</small><strong>'+esc(character.name)+'</strong><small>'+esc(saidHello?'오늘도 만나서 반가워!':nextGift?'Lv.'+nextGift.tier+'에 '+nextGift.name+' 해금':'둘만의 소품을 꾸며요')+'</small></span><b aria-hidden="true">›</b></button>'+
         '<button class="v2-rank-card" data-action="ranking">'+icon('trophy')+'<span><strong>햇살 리그</strong><small>'+esc(identity?identity.nickname+'님의 온라인 순위':'고유 닉네임으로 참여')+'</small></span><b>›</b></button>';
     }
     node.innerHTML=header+content+'<div class="v2-home-status" role="status" aria-live="polite"></div>';
@@ -49,5 +55,5 @@
       else if(b.dataset.action)act(b.dataset.action);
     };
   }
-  root.LumiHome=Object.freeze({render,decoration});
+  root.LumiHome=Object.freeze({render,decoration,portrait});
 })(globalThis);
