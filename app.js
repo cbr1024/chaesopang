@@ -492,7 +492,7 @@
     } else {
       profile.attempts[level-1]++;
       let startedRun=null;
-      try {startedRun=await ranking.startRun(level,{buddyType:profile.selectedBuddy});} catch(error) {
+      try {if(ranking.getIdentity() && navigator.onLine!==false) startedRun=await ranking.startRun(level,{buddyType:profile.selectedBuddy});} catch(error) {
         if(loadingEpoch!==epoch)return;
         rankStartIssue={code:error.code||'NETWORK_ERROR',message:error.message||'랭킹 서버 연결에 실패했어요. 이번 판은 연습으로 진행돼요.'};
         ranking.abandonRun();
@@ -619,7 +619,7 @@
   function updateRankStatus() {
     const active=Boolean(rankRun);
     const recovery=ranking.getRecoveryState();
-    $('rank-mode').textContent=recovery.required?'계정 확인 필요':active?'랭킹 도전':rankStartIssue?.code==='RULESET_CHANGED'?'업데이트 필요':ranking.pendingCount?'제출 대기 '+ranking.pendingCount:'연습 · 미인증';
+    $('rank-mode').textContent=recovery.required?'계정 확인 필요':active?'랭킹 도전':!ranking.getIdentity()?'랭킹 가입':rankStartIssue?.code==='RULESET_CHANGED'?'업데이트 필요':ranking.pendingCount?'제출 대기 '+ranking.pendingCount:'연습 · 미인증';
     $('rank-mode').classList.toggle('connected',active);
     $('rank-mode').setAttribute('aria-label',active?'서버 검증 랭킹 도전 중':rankStartIssue?.message||'랭킹 상태와 기록 보기');
     $('header-ranking').classList.toggle('has-pending',ranking.pendingCount>0);
@@ -707,6 +707,7 @@
     const request=++rankRequest;
     $('modal').classList.add('wide','ranking-modal');modalHeader('SUNPATCH LEAGUE','우리의 반짝이는 순위','happy',null);
     const identity=ranking.getIdentity();
+    if(!identity){rankingJoinModal(request);return;}
     $('modal-content').innerHTML=
       '<div class="rank-segments" role="group" aria-label="랭킹 범위"><button data-scope="campaign" aria-pressed="'+(rankScope==='campaign')+'">전체 모험</button><button data-scope="stage" aria-pressed="'+(rankScope==='stage')+'">정원별</button></div>'+
       '<div class="rank-period" role="group" aria-label="랭킹 기간"><button data-period="week" aria-pressed="'+(rankPeriod==='week')+'">이번 주</button><button data-period="all" aria-pressed="'+(rankPeriod==='all')+'">전체 기간</button><span id="ranking-population"></span></div>'+
@@ -735,11 +736,26 @@
     });
     renderWeekly();loadRanking(request);
   }
+  function rankingJoinModal(request) {
+    $('modal-content').innerHTML='<div class="ranking-banner"><span class="league-trophy">'+icon('trophy')+'</span><div><strong>나만의 닉네임으로 랭킹에 참여해요</strong><small>가입 없이도 퍼즐을 계속 즐길 수 있어요.</small></div></div><p>이메일·전화번호·로그인 비밀번호 없이 닉네임만 등록합니다. 이름은 랭킹에서 공개되며 중복되지 않아요.</p><form id="nickname-form" class="ranking-profile"><label for="nickname-input">닉네임 (2~16자)</label><div><input id="nickname-input" name="nickname" minlength="2" maxlength="16" autocomplete="off" spellcheck="false" required placeholder="나만의 이름"><button type="submit">가입</button></div><p id="nickname-status" role="status"></p></form><p class="save-note">이 기기에 계정 인증 정보가 저장돼요. 다른 기기에서는 백업 파일로 복원할 수 있습니다.</p>';
+    modalButton('퍼즐 계속하기',closeModal,true);
+    $('nickname-form').addEventListener('submit',async e=>{
+      e.preventDefault();const button=e.target.querySelector('button');button.disabled=true;const status=$('nickname-status');
+      try{
+        const name=$('nickname-input').value.normalize('NFKC').trim().replace(/ +/g,' ');
+        if(Array.from(name).length<2||Array.from(name).length>16){status.textContent='닉네임은 2~16자로 입력해 주세요.';return;}
+        await ranking.register(name);
+        updateRankStatus();
+        if(modalType==='ranking'&&request===rankRequest){showModal('ranking');toast('다음 판부터 랭킹 기록에 도전할 수 있어요.',3500);}
+      }catch(error){if(status.isConnected)status.textContent=error.code==='NICKNAME_TAKEN'?'이미 사용 중인 닉네임이에요. 다른 이름을 입력해 주세요.':error.message||'가입에 실패했어요. 다시 연결해 주세요.';}
+      finally{if(button.isConnected)button.disabled=false;}
+    });
+  }
   async function loadRanking(request) {
     const fetchId=++rankFetch;
     try {
       if(ranking.pendingCount)retryRankings();
-      await ranking.register();
+      if(!ranking.getIdentity()){rankingModal();return;}
       const [result,account]=await Promise.all([ranking.leaderboard({scope:rankScope,period:rankPeriod,level:rankStage}),ranking.getProfile()]);
       if(modalType!=='ranking'||request!==rankRequest||fetchId!==rankFetch)return;
       syncRewards(result);syncRewards(account);
@@ -774,7 +790,7 @@
     modalHeader('SUNPATCH LEAGUE','리그를 다시 연결할까요?','wink');
     $('modal-content').innerHTML='<p><strong>'+esc(recovery.nickname||'기존 리그 친구')+'</strong> 계정을 서버에서 확인하지 못했어요.</p>'+
       '<p>새 리그 계정을 연결하면 기존 계정 정보와 대기 기록 '+fmt(recovery.pendingCount)+'건을 이 기기에 따로 보관해요. 기존 기록을 새 계정의 점수로 옮기지는 않아요.</p>'+
-      '<p class="save-note">정원 해금·별·친구의 기억은 유지돼요. 현재 판은 연습 기록으로 마무리하고, 다음 정원부터 새 계정으로 도전해요.</p><p id="recovery-status" class="save-note" role="status"></p>';
+      '<p class="save-note">정원 해금·별·친구의 기억은 유지돼요. 현재 판은 연습 기록으로 마무리하고, 다음 정원부터 새 계정으로 도전해요.</p><label class="backup-field">새로운 고유 닉네임<input id="recovery-nickname" type="text" minlength="2" maxlength="16" autocomplete="off" placeholder="기존 계정과 다른 이름"></label><p id="recovery-status" class="save-note" role="status"></p>';
     modalButton('기존 기록 보관하고 새로 연결',async()=>{
       if(recoveryBusy)return;
       recoveryBusy=true;$('modal-close').disabled=true;
@@ -782,7 +798,7 @@
       const buttons=[...$('modal-actions').querySelectorAll('button')];buttons.forEach(button=>{button.disabled=true;});
       const request=++rankRequest;
       try{
-        await ranking.reconnectIdentity({confirmed:true});
+        await ranking.reconnectIdentity({confirmed:true,nickname:$('recovery-nickname').value});
         if(sessionInterrupted)return;
         rankRun=null;rankSubmission=null;rankStartIssue=null;weeklyState=null;sidebarSignature='';companionSignature='';
         persist();sidebars();updateRankStatus();
