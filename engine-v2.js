@@ -442,7 +442,7 @@
         const combo=this._specialCombo(a,b,first,second);
         if(combo){
           this._clear(combo.cells,[],events,combo.rainbow,combo.suppressed);
-          events.find(e=>e.kind==='clear').specialCombo=combo.kind;
+          const impact=events.find(e=>e.kind==='clear');impact.specialCombo=combo.kind;impact.specialComboOrigin={...b};impact.specialComboIngredients=[{...a},{...b}];
         }else{
         const initial = [a, b];
         const rainbow = new Map();
