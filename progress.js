@@ -1,10 +1,10 @@
 /* Lumi Garden — local progress, one atomic save, no network or telemetry. */
 (function (root, factory) {
   const node = typeof module === 'object' && module.exports;
-  const api = factory(root, node ? require('./engine.js') : root.LumiEngine, node ? require('./levels.js') : root.LumiLevels, node ? require('./rewards.js') : root.LumiRewards, node ? require('./journey.js') : root.LumiJourney);
+  const api = factory(root, node ? require('./engine.js') : root.LumiEngine, node ? require('./levels.js') : root.LumiLevels, node ? require('./rewards.js') : root.LumiRewards, node ? require('./journey.js') : root.LumiJourney, node ? require('./garden-economy.js') : root.LumiGarden);
   if (node) module.exports = api;
   if (root) root.LumiProgress = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (root, engine, initialLevels, rewards, journey) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (root, engine, initialLevels, rewards, journey, garden) {
   'use strict';
 
   const KEY = 'lumi-garden-v3';
@@ -37,7 +37,7 @@
         buddyMemoryLevels: Array(6).fill(1),
         seenSpecials: { row: false, col: false, bomb: false, rainbow: false },
         storySeen: { prologue: false, openings: Array(5).fill(false), endings: Array(5).fill(false) },
-        journey: journey.normalizeProfile(),
+        journey: journey.normalizeProfile(), garden: {version:garden.VERSION,owned:[],equipped:{}}, 
         attempts: Array(count).fill(0), hasSeenTutorial: false, bestScore: 0
       },
       settings: { music: true, sfx: true, haptics: true, volume: 0.45 },
@@ -109,6 +109,7 @@
       endings: Array.from({ length: 5 }, (_, i) => Array.isArray(story.endings) && story.endings[i] === true)
     };
     profile.journey = journey.normalizeProfile(source.journey, profile);
+    profile.garden = garden.normalize(source.garden, profile);
     profile.selectedBuddy = boundedInt(source.selectedBuddy, 0, 0, 5);
     profile.maxCombo = boundedInt(source.maxCombo, 0, 0, LIMITS.combo);
     profile.attempts = vector(vector(source.attempts, oldLimit, LIMITS.attempts), count, LIMITS.attempts);
