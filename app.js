@@ -45,6 +45,7 @@
   const audio = new LumiAudio();
   let uid = 0;
   const art = (type, mood = 'idle') => LumiArt.sprite(type, 'ui-' + (++uid), mood);
+  const portrait = (type,mood='happy') => LumiHome.portrait(profile,type,mood);
   let screen='play', gardenChapter=1;
   let game, level = 1, busy = false, blastMode = false, shuffles = 2, blasts = 2, maxCombo = 0;
   let storedSession = initial.session, modalType = null, pendingModal = null, returnFocus = null;
@@ -208,11 +209,11 @@
   function updateCompanion() {
     const type=profile.selectedBuddy,c=LumiArt.characters[type],bond=LumiRewards.bond(companionXp(type));
     const active=game?.scoringVersion===4?game.buddy:null,changed=active && active.type!==type;
-    const signature=[type,bond.level,bond.progress,changed,active?.tier].join('|');
+    const signature=[type,bond.level,bond.progress,changed,active?.tier,LumiWardrobe.selected(profile,type)?.id].join('|');
     if(signature===companionSignature)return;companionSignature=signature;
     $('companion-button').style.setProperty('--buddy-color',c.color);
     $('companion-button').style.setProperty('--buddy-light',c.lightColor);
-    $('companion-avatar').innerHTML=art(type,'happy');
+    $('companion-avatar').innerHTML=portrait(type,'happy');
     $('companion-name').textContent=c.name;
     $('companion-level').textContent=game?.scoringVersion===2?'새 혜택은 다음 정원부터':changed?'다음 판부터 함께':'Lv.'+(active?.tier||bond.level)+' · '+LumiRewards.BONDS[(active?.tier||bond.level)-1].label;
     $('companion-button').setAttribute('aria-label',c.name+' 동행 친구, '+$('companion-level').textContent+(changed?', 이번 판 응원과 클리어 XP는 '+LumiArt.names[active.type]+'에게':'')+', 친밀도와 혜택 보기');
@@ -234,7 +235,7 @@
     const signature=[type,bond.level,level,profile.unlocked,profile.stars.join(','),profile.journey?.stamps.join(',')].join('|');
     if(signature===sidebarSignature)return; sidebarSignature=signature;
     $('brand-friend').innerHTML=art(type,'happy');
-    $('portrait-spirit').innerHTML=art(type);
+    $('portrait-spirit').innerHTML=portrait(type);
     $('friend-name').textContent=c.name; $('friend-en').textContent=c.en;
     $('friend-tagline').textContent=c.tagline; $('friend-bond').textContent=bond.label;
     $('friend-card').setAttribute('aria-label',c.name+'와 인사하기');
@@ -263,8 +264,8 @@
     const priority=priorities[kind]||1,now=performance.now();
     if(now<reactionUntil && priority<reactionPriority)return;
     reactionPriority=priority;reactionUntil=now+(kind==='match'?850:1700);
-    clearTimeout(buddyTimer); $('portrait-spirit').innerHTML=art(profile.selectedBuddy,mood);
-    const avatar=$('companion-avatar');avatar.innerHTML=art(profile.selectedBuddy,mood);
+    clearTimeout(buddyTimer); $('portrait-spirit').innerHTML=portrait(profile.selectedBuddy,mood);
+    const avatar=$('companion-avatar');avatar.innerHTML=portrait(profile.selectedBuddy,mood);
     if(line)$('friend-speech').textContent=line;
     if(line)$('companion-message').textContent=line;
     $('companion-button').dataset.reaction=kind;
@@ -615,6 +616,7 @@
     else if(action==='chapter'){gardenChapter=Math.max(1,Math.min(5,value));renderHome();$('v2-home').querySelector('[data-chapter="'+gardenChapter+'"]')?.focus({preventScroll:true});}
     else if(action==='purchase')showModal('garden-item',{id:value});
     else if(action==='equip'||action==='unequip')applyGarden(action,value);
+    else if(action==='friend')showModal('character',{type:profile.selectedBuddy});
     else if(['map','album','ranking'].includes(action))showModal(action);
   }
   function gardenItemModal(id){
@@ -1098,7 +1100,7 @@
   function characterLightMarkup(type) {
     const c=LumiArt.characters[type];
     const motif=type===1?'<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="12" rx="4" ry="8" transform="rotate(24 12 12)" fill="currentColor" stroke="none"/></svg>':type===5?'<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="2.5"/><circle cx="10" cy="9" r="1.3" fill="currentColor" stroke="none"/></svg>':type===4?'<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3A9 9 0 1 0 21 18 11 11 0 0 1 19 3Z" fill="currentColor" stroke="none"/></svg>':icon(['leaf','spark','heart','star','spark','flower'][type]);
-    return '<button class="character-pop" id="character-pop" style="--produce-color:'+c.color+';--produce-light:'+c.lightColor+'" aria-label="'+esc(c.name)+'의 '+esc(['초록','주황','사과 빨강','토마토 다홍','노랑','크림빛'][type])+' 팡빛과 소리 느껴보기"><span class="character-pop-art">'+art(type,'happy')+'</span><span class="character-pop-lights" aria-hidden="true">'+Array.from({length:8},()=>'<span class="character-pop-light">'+motif+'</span>').join('')+'</span><span class="character-pop-caption">'+icon('spark')+'톡! '+esc(c.name)+'의 팡빛을 느껴봐요</span></button>';
+    return '<button class="character-pop" id="character-pop" style="--produce-color:'+c.color+';--produce-light:'+c.lightColor+'" aria-label="'+esc(c.name)+'의 '+esc(['초록','주황','사과 빨강','토마토 다홍','노랑','크림빛'][type])+' 팡빛과 소리 느껴보기"><span class="character-pop-art">'+portrait(type,'happy')+'</span><span class="character-pop-lights" aria-hidden="true">'+Array.from({length:8},()=>'<span class="character-pop-light">'+motif+'</span>').join('')+'</span><span class="character-pop-caption">'+icon('spark')+'톡! '+esc(c.name)+'의 팡빛을 느껴봐요</span></button>';
   }
   function wireWorldLinks() {
     $('modal-content').querySelectorAll('[data-promise-level]').forEach(n=>n.addEventListener('click',()=>showModal('promise',{level:Number(n.dataset.promiseLevel)})));
@@ -1205,6 +1207,37 @@
     const relations=document.createElement('button');relations.className='world-text-link';relations.innerHTML=icon('heart')+'여섯 친구, 열다섯 가지 사이 <span>→</span>';relations.addEventListener('click',()=>showModal('relations'));$('modal-content').appendChild(relations);
     modalButton('정원으로 돌아가기',closeModal,true);
   }
+  function wardrobeMarkup(type){
+    const selected=LumiWardrobe.selected(profile,type),today=LumiWardrobe.today(),greeted=LumiWardrobe.normalize(profile.wardrobe,profile).greetings[type]===today;
+    const options=LumiWardrobe.catalog.filter(item=>item.type===type);
+    return '<section class="v2-wardrobe"><div class="v2-wardrobe-heading"><strong>우리만의 작은 소품</strong><span>'+LumiWardrobe.owned(profile,type).length+'/2</span></div><p>친밀도가 오르면 특별한 소품을 선물해요. 꾸미기는 점수에 영향을 주지 않아요.</p><div class="v2-wardrobe-options">'+options.map(item=>{
+      const locked=LumiWardrobe.tier(profile,type)<item.tier,active=selected?.id===item.id;
+      return '<button type="button" class="v2-wardrobe-item '+(active?'equipped':'')+'" data-wardrobe="'+item.id+'" aria-pressed="'+Boolean(active)+'" '+(locked?'disabled':'')+'>'+LumiWardrobe.illustration(item,'wardrobe-ui-'+(++uid))+'<strong>'+esc(item.name)+'</strong><small>'+(locked?'Lv.'+item.tier+'에 해금':active?'착용 중 · 해제':'착용하기')+'</small></button>';
+    }).join('')+'</div><button class="v2-greet" id="friend-greet">'+icon('heart')+(greeted?'한 번 더 인사하기':'오늘의 인사 건네기')+'</button><p id="friend-feedback" role="status" aria-live="polite">'+(greeted?'오늘 인사를 나눴어요.':'친구에게 먼저 손을 흔들어 봐요.')+'</p></section>';
+  }
+  function updateWardrobe(type,id){
+    if(sessionInterrupted||!sessionGuard.canWrite())return;
+    const current=LumiWardrobe.selected(profile,type),result=LumiWardrobe.equip(profile,type,current?.id===id?null:id);
+    if(!result.ok)return;
+    const previous=profile.wardrobe;profile.wardrobe=result.state;
+    if(!persist()){profile.wardrobe=previous;$('friend-feedback').textContent='저장하지 못했어요. 이전 모습은 그대로예요.';return;}
+    const offset=$('modal').scrollTop;
+    showModal('character',{type});$('modal').scrollTop=offset;
+    const next=$('modal-content').querySelector('[data-wardrobe="'+id+'"]');next?.focus({preventScroll:true});
+    $('friend-feedback').textContent=LumiWardrobe.selected(profile,type)?'새 소품을 착용했어요!':'소품을 다시 보관했어요.';
+    companionSignature='';sidebarSignature='';sidebars();updateCompanion();
+    if(screen!=='play')renderHome();audio.play('collect');
+  }
+  function greetFriend(type){
+    if(sessionInterrupted||!sessionGuard.canWrite())return;
+    const result=LumiWardrobe.greet(profile,type);if(!result.ok)return;
+    const before=profile.wardrobe;profile.wardrobe=result.state;
+    if(!persist()){profile.wardrobe=before;$('friend-feedback').textContent='인사를 기록하지 못했어요.';return;}
+    const lines=['네 자리를 따뜻하게 준비했어!','오늘도 함께 탐험할래?','작은 흠까지 반짝이는 하루야.','네 목소리를 들으니 좋아.','우리 잠깐 웃고 시작하자!','오늘의 작은 별을 같이 찾아보자.'];
+    $('friend-feedback').textContent=lines[type];
+    $('friend-greet').innerHTML=icon('heart')+'한 번 더 인사하기';
+    playCharacterLight(type,$('character-pop'));if(screen!=='play')renderHome();
+  }
   function characterModal(type) {
     const c=LumiArt.characters[type];if(!c){showModal('album');return;}
     const lore=LumiStory.characters[type];
@@ -1212,7 +1245,7 @@
     const verified=Boolean(rankRun && profile.verifiedBuddyPlayerId===ranking.getIdentity()?.id);
     $('modal').classList.add('character-modal');
     modalHeader(c.species+' · BATMUNGCHI',c.name,'happy',null);
-    $('modal-content').innerHTML=characterLightMarkup(type)+
+    $('modal-content').innerHTML=characterLightMarkup(type)+wardrobeMarkup(type)+
       '<span class="character-tag" style="--friend-light:'+c.lightColor+'">'+esc(c.tagline)+'</span>'+
       '<p>'+esc(lore.personality)+'</p><div class="character-story">'+esc(lore.story)+'</div>'+
       '<div class="character-traits">'+c.signature.split(',').map(t=>'<span>'+esc(t.trim())+'</span>').join('')+'</div>'+
@@ -1225,9 +1258,11 @@
       '<p class="save-note">'+(verified?'리그 친밀도 '+fmt(total)+' XP · 연결된 정원 완성과 주간 선물로 모아요.':'친구 친밀도 '+fmt(total)+' XP · 기기와 리그에서 가장 가까워진 마음을 간직해요.')+(verified&&local>total?'<br>추억은 '+fmt(local)+' XP, Lv.'+memoryBond.level+'까지 그대로 열려 있어요.':'')+'</p>'+memoryMarkup(type,memoryBond);
     $('relationship-friend').addEventListener('click',()=>showModal('character',{type:lore.relationship.with}));
     $('character-pop').addEventListener('click',()=>playCharacterLight(type,$('character-pop')));
+    $('modal-content').querySelectorAll('[data-wardrobe]').forEach(b=>b.addEventListener('click',()=>updateWardrobe(type,b.dataset.wardrobe)));
+    $('friend-greet').addEventListener('click',()=>greetFriend(type));
     const links=document.createElement('button');links.className='world-text-link';links.innerHTML=icon('heart')+esc(c.name)+'와 다섯 친구의 이야기 <span>→</span>';links.addEventListener('click',()=>showModal('relations',{type}));$('relationship-friend').after(links);
     modalButton(profile.selectedBuddy===type?'지금 함께하는 친구':'오늘은 '+c.name+'와 함께!',()=>{
-      profile.selectedBuddy=type;weeklyRecipient=type;persist();sidebars();updateCompanion();closeModal();buddy('wink',c.tagline,'selected');audio.play('collect');
+      const previous=profile.selectedBuddy;profile.selectedBuddy=type;weeklyRecipient=type;if(!persist()){profile.selectedBuddy=previous;weeklyRecipient=previous;$('friend-feedback').textContent='친구 선택을 저장하지 못했어요.';return;}sidebars();updateCompanion();closeModal();if(screen!=='play')renderHome();buddy('wink',c.tagline,'selected');audio.play('collect');
     },true);
     modalButton('다른 친구 만나보기',()=>showModal('album'));
   }
