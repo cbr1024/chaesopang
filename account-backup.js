@@ -21,14 +21,24 @@
       identity=journal?.identity || JSON.parse(values['lumi.ranking.identity.v1']||'null');
       if (journal?.identity?.player?.id && identity?.player?.id !== journal.identity.player.id) throw Error('계정 정보가 일치하지 않아요.');
     } catch { throw Error('백업 파일의 랭킹 정보가 올바르지 않아요.'); }
-    if (!identity || !/^[A-Za-z0-9_-]{43}$/.test(identity.token||'') || typeof identity.player?.id !== 'string') throw Error('유효한 랭킹 계정이 없어 백업할 수 없어요.');
+    if (!identity) return null;
+    if (!/^[A-Za-z0-9_-]{43}$/.test(identity.token||'') || typeof identity.player?.id !== 'string') throw Error('유효하지 않은 랭킹 계정 정보예요.');
     return identity;
+  }
+  function validateProgress(values) {
+    const raw=JSON.parse(values['lumi-garden-v3']||'null');
+    if(!raw||raw.version!==root.LumiProgress.VERSION||!raw.profile||!raw.settings||!Array.isArray(raw.profile.stars)||raw.profile.stars.length!==root.LumiLevels.length) throw Error('지원하지 않는 정원 진행 기록이에요.');
+    const normalized=root.LumiProgress.normalize(raw);
+    if(normalized.profile.unlocked!==raw.profile.unlocked||raw.session&&!normalized.session) throw Error('정원 진행 기록이 손상됐어요.');
+    const journal=JSON.parse(values['lumi.ranking.journal.v1']||'null');
+    if(journal&&(journal.version!==1||!Array.isArray(journal.pending)||journal.pending.length>20)) throw Error('랭킹 기록 형식을 확인해 주세요.');
   }
   async function create(password) {
     available();
     const values=Object.fromEntries(KEYS.map(k=>[k,root.localStorage.getItem(k)]));
     const identity=identityFrom(values);
     if (!values['lumi-garden-v3']) throw Error('저장된 정원 진행 기록을 찾을 수 없어요.');
+    validateProgress(values);
     const body=encoder.encode(JSON.stringify({version:VERSION,values}));
     if (body.length > MAX_BYTES) throw Error('백업 데이터가 너무 커요.');
     const salt=crypto.getRandomValues(new Uint8Array(16));
@@ -39,10 +49,11 @@
     const url=URL.createObjectURL(blob),a=document.createElement('a');
     a.href=url;a.download='chaesopang-recovery-'+new Date().toISOString().slice(0,10)+'.json';a.style.display='none';
     document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),15000);
-    return {playerId:identity.player.id};
+    return {playerId:identity?.player.id||null};
   }
   async function restore(file,password,baseUrl) {
     available();
+    const before=Object.fromEntries(KEYS.map(k=>[k,root.localStorage.getItem(k)]));
     if (!file || file.size > MAX_BYTES * 2) throw Error('백업 파일 크기를 확인해 주세요.');
     let packet;
     try { packet=JSON.parse(await file.text()); }
@@ -63,6 +74,9 @@
     if(!KEYS.every(k=>typeof values[k]==='string'||values[k]===null)) throw Error('백업 데이터 형식이 잘못됐어요.');
     const identity=identityFrom(values);
     if (!values['lumi-garden-v3']) throw Error('진행 기록이 없는 백업이에요.');
+    validateProgress(values);
+    if(!identity&&identityFrom(before)) throw Error('랭킹 계정이 없는 백업으로 현재 랭킹 계정을 덮어쓸 수 없어요.');
+    if(identity){
     const url=new URL(baseUrl);
     if(url.protocol!=='https:'||url.username||url.password||url.search||url.hash) throw Error('안전한 서버 주소를 확인해 주세요.');
     // Validate actual ownership before touching current local progress.
@@ -74,14 +88,16 @@
       if(profile.player?.id!==identity.player.id) throw Error('백업 계정의 소유자가 일치하지 않아요.');
     } catch(error) { throw Error(error.name==='AbortError'?'서버 연결 시간이 초과됐어요. 데이터는 변경하지 않았어요.':error.message); }
     finally {clearTimeout(timeout);}
-    const before=Object.fromEntries(KEYS.map(k=>[k,localStorage.getItem(k)]));
+    }
+    if(root.LumiSession?.current&&!root.LumiSession.current.canWrite()) throw Error('다른 창에서 정원을 사용 중이에요.');
+    if(KEYS.some(k=>localStorage.getItem(k)!==before[k])) throw Error('복원 중 기록이 변경됐어요. 잠시 후 다시 시도해 주세요.');
     try {
       for(const k of KEYS) {if(values[k]===null)localStorage.removeItem(k);else localStorage.setItem(k,values[k]);}
     }catch(error) {
       for(const k of KEYS){try{if(before[k]===null)localStorage.removeItem(k);else localStorage.setItem(k,before[k]);}catch{}}
       throw Error('기기 저장 공간이 부족해 복원하지 못했어요.');
     }
-    return {playerId:identity.player.id};
+    return {playerId:identity?.player.id||null};
   }
   root.LumiAccountBackup=Object.freeze({create,restore});
   if (typeof module==='object'&&module.exports) module.exports={create,restore};
