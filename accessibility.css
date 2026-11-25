@@ -41,3 +41,16 @@
   .game-footer button { flex:1; }
   .backup-actions { grid-template-columns:1fr; }
 }
+
+/* V2 mobile readiness: retain useful strategy hints and readable auxiliary labels. */
+@media(max-width:520px) {
+  .play-hint { position:static; width:auto; height:auto; min-height:28px; overflow:visible; clip-path:none; padding:5px 8px; line-height:1.4; word-break:keep-all; }
+  .stage-heading .rank-mode,.stage-heading .chapter-label { min-height:44px; }
+  .companion-identity small,.promise-copy small,.promise-count,.fever-heading>span,.fever-heading strong,.combo-chip {font-size:12px !important; line-height:1.35;}
+  .companion-strip,.promise-strip { height:auto; min-height:48px; }
+  .companion-message { font-size:12px; }
+  .backup-field input,.ranking-profile input { font-size:16px; min-height:44px; }
+  .ranking-profile form>div { flex-wrap:wrap; }
+  .ranking-profile form>div>input { flex:1; min-width:120px; }
+  .ranking-profile form>div>button { min-height:44px; }
+}
