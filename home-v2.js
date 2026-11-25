@@ -18,7 +18,7 @@
   }
   function render(node,{profile,level,active,busy,ranked,identity,view='home',chapter,act}){
     const summary=root.LumiGarden.summary(profile),all=root.LumiJourney.restorationSummary(profile);
-    const complete=profile.stars.filter(n=>n>0).length;
+    const complete=profile.stars.filter(n=>n>0).length, fresh=!profile.hasSeenTutorial&&complete===0;
     const actual=Number.isInteger(chapter)?chapter:Math.ceil(level/10),region=all[actual-1];
     const itemMap=new Map(root.LumiGarden.catalog.map(i=>[i.id,i]));
     const equipped=region.projects.map(p=>itemMap.get(summary.garden.equipped[p.id])).filter(Boolean);
@@ -37,7 +37,7 @@
             return '<button class="v2-item '+(equipped?'equipped':'')+'" data-item="'+i.id+'" data-op="'+(equipped?'unequip':owned?'equip':'purchase')+'" aria-label="'+esc(i.name)+', '+(equipped?'배치 해제':owned?'배치하기':i.price+'씨앗으로 얻기')+'" '+(!owned&&summary.balance<i.price?'disabled':'')+'>'+decoration(i)+'<strong>'+esc(i.name)+'</strong><span>'+(equipped?'배치 중 · 해제':owned?'보유 · 배치':i.price+' 씨앗')+'</span></button>';
           }).join('')+'</div>')+'</article>').join('')+'<p class="v2-note">소품은 한 번 얻으면 다시 비용 없이 배치할 수 있어요. 정원과 씨앗은 이 기기에 저장됩니다.</p>';
     }else{
-      content=hero+'<div class="v2-next"><div><small>'+(active?'이어갈 퍼즐':'다음 모험')+'</small><h2>'+String(def.id).padStart(2,'0')+' · '+esc(def.title)+'</h2><p>'+esc(def.recommendedSkill)+'</p></div><button class="v2-map" data-action="map" aria-label="50개 스테이지 지도">'+icon('map')+'지도</button></div><button class="v2-play" data-action="play" '+(busy?'disabled':'')+'>'+icon('play')+'<span>'+(active?'이어서 놀기':complete?'다음 퍼즐 시작':'첫 퍼즐 시작')+'<small>'+(ranked?'이전 랭킹 판 이어하기':'가입 없이 · 기기 저장')+'</small></span><b>›</b></button>'+
+      content=hero+'<div class="v2-next"><div><small>'+(fresh?'첫 모험':active?'이어갈 퍼즐':complete===50?'마지막 정원':'다음 모험')+'</small><h2>'+String(def.id).padStart(2,'0')+' · '+esc(def.title)+'</h2><p>'+esc(def.recommendedSkill)+'</p></div><button class="v2-map" data-action="map" aria-label="50개 스테이지 지도">'+icon('map')+'지도</button></div><button class="v2-play" data-action="play" '+(busy?'disabled':'')+'>'+icon('play')+'<span>'+(fresh?'첫 퍼즐 시작':active?'이어서 놀기':complete===50?'최고 기록에 도전':'다음 퍼즐 시작')+'<small>'+(ranked?'이전 랭킹 판 이어하기':'가입 없이 · 기기 저장')+'</small></span><b>›</b></button>'+
         '<div class="v2-section-title"><h2>오늘의 작은 목표</h2><span>'+complete+'/50 클리어</span></div><div class="v2-progress"><span style="width:'+complete/50*100+'%"></span></div><div class="v2-goal"><span>'+icon('flower')+'</span><div><strong>'+esc(next?.name||'정원 꾸미기')+'</strong><small>'+esc(next?'복원 조건을 확인하고 햇살밭을 밝혀요.':'모은 소품으로 풍경을 바꾸어 보세요.')+'</small></div><button data-action="garden">보기 ›</button></div>'+
         '<button class="v2-rank-card" data-action="ranking">'+icon('trophy')+'<span><strong>햇살 리그</strong><small>'+esc(identity?identity.nickname+'님의 온라인 순위':'고유 닉네임으로 참여')+'</small></span><b>›</b></button>';
     }
