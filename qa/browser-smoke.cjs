@@ -63,7 +63,7 @@ async function point(page,pos){
   await tile.scrollIntoViewIfNeeded();const r=await tile.boundingBox();assert(r,'tile missing');return {x:r.x+r.width/2,y:r.y+r.height/2};
 }
 async function touchMove(env,swipe=false){
-  const {page,ctx}=env;await idle(page);const before=await moveFor(page);assert(before.h);
+  const {page,ctx}=env;await idle(page);if(await page.locator('#special-coach').isVisible())await page.locator('#coach-dismiss').tap();await page.locator('#board').scrollIntoViewIfNeeded();const before=await moveFor(page);assert(before.h);
   const a=await point(page,before.h.from),b=await point(page,before.h.to);
   if(swipe&&env.engine==='chromium'){
     const cdp=await ctx.newCDPSession(page);
@@ -98,6 +98,34 @@ async function verify(env,tag){
         const p=await point(page,pos);await page.touchscreen.tap(p.x,p.y);assert.equal((await saved(page)).session.game.moves,state.session.game.moves);
       }
       await touchMove(env,true);await idle(page);await verify(env,'terrain '+level);
+    }
+    {
+      const env=await boot(browser,origin,390,844,{fixture:stageFixture(1)}),{page}=env;
+      await page.locator('[data-action=play]').tap();
+      const initial=await saved(page);let count=0;
+      while((await saved(page)).session&&count<Levels[0].moves){await touchMove(env,count%3===0);count++;}
+      await page.waitForSelector('#modal-backdrop:not([hidden])');
+      const end=await saved(page);assert(end.profile.stars[0]>0,'stage 1 did not clear');
+      assert(end.profile.unlocked>=2,'next level not unlocked');
+      assert(Garden.earned(end.profile)>Garden.earned(initial.profile),'seed reward missing');
+      assert(await page.locator('.v2-reward-ceremony').isVisible(),'reward presentation missing');
+      assert((await page.locator('#v2-result-save').textContent()).includes('저장 완료'),'completion save status missing');
+      await page.screenshot({path:path.join(OUT,'stage-1-result.png'),fullPage:true});
+      await page.locator('#modal-actions .primary-button').tap();await idle(page);
+      assert.equal((await saved(page)).session.level,2);
+      results.push({tag:'stage 1 full real-touch clear and reward',moves:count,pass:true});await verify(env,'stage 2 transition');
+    }
+    {
+      const env=await boot(browser,origin,390,844,{fixture:stageFixture(4,{buddyMemoryLevels:[4,1,1,1,1,1]})}),{page}=env;
+      await page.locator('[data-action=friend]').tap();await page.waitForSelector('#friend-greet');
+      await page.locator('[data-wardrobe="leaf-map"]').tap();await page.waitForFunction(()=>JSON.parse(localStorage.getItem('lumi-garden-v3')).profile.wardrobe.equipped[0]==='leaf-map');
+      assert(await page.locator('[data-wardrobe="leaf-map"]').getAttribute('aria-pressed')==='true');
+      await page.locator('#friend-greet').tap();assert((await saved(page)).profile.wardrobe.greetings[0]);
+      await page.screenshot({path:path.join(OUT,'friend-wardrobe.png'),fullPage:true});
+      await page.locator('#modal-close').tap();await page.reload();await page.waitForFunction(()=>document.body.dataset.v2Screen==='home');
+      assert.equal((await saved(page)).profile.wardrobe.equipped[0],'leaf-map');
+      assert(await page.locator('.v2-friend-card .v2-worn-item').count()>0);
+      await verify(env,'cosmetic unlock, greeting and restoration');
     }
     const env=await boot(browser,origin,390,844,{fixture:stageFixture(4)});const {page}=env;
     await page.locator('[data-v2-nav=garden]').tap();await page.waitForFunction(()=>document.body.dataset.v2Screen==='garden');
