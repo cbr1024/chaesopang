@@ -12,6 +12,10 @@ jobs:
   browser:
     runs-on: ubuntu-24.04
     timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [chromium, webkit]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,13 +24,19 @@ jobs:
       - name: Install pinned browser harness
         run: npm install --no-save --ignore-scripts playwright@1.51.1
       - name: Install browser binaries
-        run: npx playwright install --with-deps chromium webkit
+        run: npx playwright install --with-deps ${{ matrix.engine }}
       - name: Real portrait browser regression
-        run: QA_WEBKIT=1 node qa/browser-smoke.cjs
-      - name: Keep screenshots and exact test report
+        env:
+          QA_ENGINE: ${{ matrix.engine }}
+          DEBUG: pw:browser
+        run: node qa/browser-smoke.cjs
+      - name: Save exact tested source
+        if: always() && matrix.engine == 'chromium'
+        run: mkdir -p qa-output && git archive --format=zip HEAD -o qa-output/source.zip
+      - name: Keep screenshots, animation and exact test report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: chaesopang-mobile-qa
+          name: chaesopang-mobile-qa-${{ matrix.engine }}
           path: qa-output/
           if-no-files-found: warn
