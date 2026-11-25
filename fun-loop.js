@@ -33,7 +33,7 @@
  function validGame(day,raw,finished=false){
   try{
    const g=Engine.Game.fromState(raw),d=definition(day);
-   if(g.seed!==d.seed||g.rows!==6||g.cols!==6||g.types!==6||g.initialMoves!==MOVES||g.target!==TARGET||g.requireScore!==true||g.objectives.length||g.budsGoal||Object.values(g.terrainGoal).some(Boolean)||g.buddy.type!==0||g.buddy.tier!==1||g.won||Boolean(g.over)!==finished)return null;
+   if(g.rulesRevision!==Engine.REVISION||g.delivery.length||g.seed!==d.seed||g.rows!==6||g.cols!==6||g.types!==6||g.initialMoves!==MOVES||g.target!==TARGET||g.requireScore!==true||g.objectives.length||g.budsGoal||Object.values(g.terrainGoal).some(Boolean)||g.buddy.type!==0||g.buddy.tier!==1||g.won||Boolean(g.over)!==finished)return null;
    return g;
   }catch{return null;}
  }
@@ -78,7 +78,7 @@
   const state=normalize(raw),a=state.active;
   if(!a||!int(maxCombo,0,65))return {ok:false,code:'NO_RUN',state};
   const g=validGame(a.day,game.exportState(),game.over);
-  if(!g||g.moves>=a.game.moves)return {ok:false,code:'INVALID_MOVE',state};
+  if(!g||g.moves!==a.game.moves-1)return {ok:false,code:'INVALID_MOVE',state};
   if(!g.over){state.active={...a,maxCombo:Math.max(a.maxCombo,maxCombo),game:g.exportState()};return {ok:true,state,finished:false};}
   const e=state.entries[a.day],previous=e.best,first=e.completed===0;
   e.completed++;e.last=g.score;e.best=Math.max(e.best,g.score);state.active=null;
