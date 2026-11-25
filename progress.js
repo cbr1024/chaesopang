@@ -1,10 +1,10 @@
 /* Lumi Garden — local progress, one atomic save, no network or telemetry. */
 (function (root, factory) {
   const node = typeof module === 'object' && module.exports;
-  const api = factory(root, node ? require('./engine.js') : root.LumiEngine, node ? require('./levels.js') : root.LumiLevels, node ? require('./rewards.js') : root.LumiRewards, node ? require('./journey.js') : root.LumiJourney, node ? require('./garden-economy.js') : root.LumiGarden);
+  const api = factory(root, node ? require('./engine.js') : root.LumiEngine, node ? require('./levels.js') : root.LumiLevels, node ? require('./rewards.js') : root.LumiRewards, node ? require('./journey.js') : root.LumiJourney, node ? require('./garden-economy.js') : root.LumiGarden, node ? require('./engine-v2.js') : root.LumiEngineV2, node ? require('./levels-v2.js') : root.LumiLevelsV2);
   if (node) module.exports = api;
   if (root) root.LumiProgress = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (root, engine, initialLevels, rewards, journey, garden) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (root, engine, initialLevels, rewards, journey, garden, engineV2, levelsV2) {
   'use strict';
 
   const KEY = 'lumi-garden-v3';
@@ -46,7 +46,8 @@
   }
 
   function matchesLevel(game, saved, level) {
-    const levels = initialLevels || root.LumiLevels;
+    const isV2=saved?.version===engineV2.STATE_VERSION;
+    const levels = isV2?levelsV2:(initialLevels || root.LumiLevels);
     const definition = Array.isArray(levels) ? levels.find(item => item.id === level) : null;
     if (!definition) return false;
     if (game.rows !== 6 || game.cols !== 6 || game.types !== 6 || game.requireScore !== false || game.initialMoves !== definition.moves || game.target !== definition.target) return false;
@@ -54,13 +55,14 @@
     if (goalKey(game.objectives) !== goalKey(definition.objectives)) return false;
     const expectedBuds = Array.from({ length: 6 }, () => Array(6).fill(0));
     for (const bud of definition.buds) expectedBuds[bud.r][bud.c] = bud.hp;
-    return JSON.stringify(saved.initialBuds) === JSON.stringify(expectedBuds);
+    if(JSON.stringify(saved.initialBuds)!==JSON.stringify(expectedBuds))return false;
+    return !isV2 || saved.rulesRevision===engineV2.REVISION && JSON.stringify(saved.initialTerrain)===JSON.stringify(engineV2.normalizeTerrain(definition.terrain,6,6));
   }
 
   function normalizeSession(value, profile) {
     if (!record(value) || !validInt(value.level, 1, levelCount()) || value.level > profile.unlocked ||
         !validInt(value.shuffles, 0, 2) || !validInt(value.blasts, 0, 2) || !validInt(value.maxCombo, 0, LIMITS.combo)) return null;
-    const api = engine || root.LumiEngine;
+    const api = value.game?.version===engineV2.STATE_VERSION?engineV2:(engine || root.LumiEngine);
     if (!api || !api.Game || typeof api.Game.fromState !== 'function') return null;
     try {
       const game = api.Game.fromState(value.game);
