@@ -29,7 +29,7 @@
       chapters:Array.from({length:5},(_,i)=>stars.slice(i*10,i*10+10).every(n=>n>0)?20:0).reduce((a,b)=>a+b,0)};
   };
   const earned=profile=>Object.values(earnedParts(profile)).reduce((a,b)=>a+b,0);
-  const unlockedSlots=profile=>new Set(Journey.restorationSummary(profile).flatMap(c=>c.projects.filter(p=>p.state==='restored').map(p=>p.id)));
+  const unlockedSlots=profile=>{const slots=new Set(Journey.restorationSummary(profile).flatMap(c=>c.projects.filter(p=>p.state==='restored').map(p=>p.id)));if(profile?.stars?.[0]>0)slots.add(Journey.PROJECTS[0].id);return slots;};
   function normalize(value,profile){
     const valid=value&&value.version===VERSION;
     const allowed=unlockedSlots(profile),budget=earned(profile),owned=[];
