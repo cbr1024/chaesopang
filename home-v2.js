@@ -25,12 +25,12 @@
     const complete=profile.stars.filter(n=>n>0).length, fresh=!profile.hasSeenTutorial&&complete===0;
     const actual=Number.isInteger(chapter)?chapter:Math.ceil(level/10),region=all[actual-1];
     const itemMap=new Map(root.LumiGarden.catalog.map(i=>[i.id,i]));
-    const equipped=region.projects.map(p=>itemMap.get(summary.garden.equipped[p.id])).filter(Boolean);
+    const equipped=region.projects.map(p=>itemMap.get(summary.garden.equipped[p.id])||null);
     const def=definition||root.LumiLevelsV2[level-1],buddy=profile.selectedBuddy;
     const title=view==='garden'?'나의 햇살밭':'오늘도, 햇살 한 줌';
     const character=root.LumiArt.characters[buddy],tier=root.LumiWardrobe.tier(profile,buddy),nextGift=root.LumiWardrobe.next(profile,buddy),saidHello=root.LumiWardrobe.normalize(profile.wardrobe,profile).greetings[buddy]===root.LumiWardrobe.today();
     const next=region.projects.find(p=>p.state!=='restored');
-    const hero='<div class="v2-landscape"><div class="v2-landmark">'+root.LumiArt.landmark(actual,region.restored,'v2-land-'+(++serial),region.projects.map(p=>p.state==='restored'),Boolean(profile.stars[actual*10-1]))+'</div><div class="v2-cast">'+[buddy,(buddy+1)%6,(buddy+3)%6].map(t=>portrait(profile,t)).join('')+'</div><div class="v2-placed">'+equipped.map(i=>'<span title="'+esc(i.name)+'">'+decoration(i)+'</span>').join('')+'</div><span class="v2-location">'+icon('leaf')+esc(root.LumiLevels.chapters[actual-1].title)+' · '+region.restored+'/3 복원</span></div>';
+    const hero='<div class="v2-landscape"><div class="v2-landmark">'+root.LumiArt.landmark(actual,region.restored,'v2-land-'+(++serial),region.projects.map(p=>p.state==='restored'),Boolean(profile.stars[actual*10-1]))+'</div><div class="v2-cast">'+[buddy,(buddy+1)%6,(buddy+3)%6].map(t=>portrait(profile,t)).join('')+'</div><div class="v2-placed">'+equipped.map((i,index)=>i?'<span data-slot="'+index+'" title="'+esc(i.name)+'">'+decoration(i)+'</span>':'<span class="v2-empty-placement" data-slot="'+index+'" aria-hidden="true"></span>').join('')+'</div><span class="v2-location">'+icon('leaf')+esc(root.LumiLevels.chapters[actual-1].title)+' · '+region.restored+'/3 복원</span></div>';
     const header='<div class="v2-intro"><span class="v2-kicker">SUNPATCH · 채소팡</span><h1 tabindex="-1" id="v2-heading">'+title+'</h1><p>'+ (view==='garden'?'퍼즐에서 모은 햇살씨앗으로 우리만의 풍경을 만들어요.':'작은 팡빛을 모아 친구들과 정원을 가꿔요.')+'</p></div><div class="v2-wallet"><span>'+icon('star')+'<b>'+profile.stars.reduce((a,b)=>a+b,0)+'</b><small>별</small></span><span>'+icon('leaf')+'<b>'+summary.balance+'</b><small>햇살씨앗</small></span><span>'+icon('flower')+'<b>'+all.reduce((n,c)=>n+c.restored,0)+'/15</b><small>복원</small></span></div>';
     let content;
     if(view==='garden'){
