@@ -16,7 +16,7 @@
 <link rel="stylesheet" href="world.css?v=a834908674b3">
 <link rel="stylesheet" href="plush.css?v=2ea826fd6e73">
 <link rel="stylesheet" href="accessibility.css?v=3">
-<link rel="stylesheet" href="home-v2.css?v=1">
+<link rel="stylesheet" href="home-v2.css?v=2">
 <script defer src="game-config.js?v=ranking-6000ms-1"></script>
 <script defer src="session-guard.js?v=b33599a50396"></script>
 <script defer src="mobile.js?v=98b180e52177"></script>
@@ -24,17 +24,19 @@
 <script defer src="story.js?v=77beab0aebc6"></script>
 <script defer src="rewards.js?v=16728dfb0493"></script>
 <script defer src="engine.js?v=97592a96c308"></script>
+<script defer src="engine-v2.js?v=1"></script>
 <script defer src="levels.js?v=dd3c74c90339"></script>
+<script defer src="levels-v2.js?v=1"></script>
 <script defer src="hints.js?v=34e547503c19"></script>
 <script defer src="journey.js?v=a64b63b28b61"></script>
 <script defer src="garden-economy.js?v=1"></script>
-<script defer src="progress.js?v=v2-garden-1"></script>
+<script defer src="progress.js?v=v2-terrain-1"></script>
 <script defer src="effects.js?v=d73dd7293107"></script>
-<script defer src="board.js?v=8fb86ccf7c90"></script>
+<script defer src="board.js?v=v2-terrain-1"></script>
 <script defer src="ranking-client.js?v=v2-nickname-1"></script>
 <script defer src="account-backup.js?v=3"></script>
-<script defer src="home-v2.js?v=1"></script>
-<script defer src="app.js?v=v2-home-1"></script>
+<script defer src="home-v2.js?v=2"></script>
+<script defer src="app.js?v=v2-campaign-1"></script>
 </head>
 <body>
   <svg class="icon-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
@@ -61,6 +63,7 @@
 <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="var(--surface,#fff)"/><circle cx="16" cy="17" r="3" fill="var(--surface,#fff)"/></symbol>
 <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M7 3h10v5c0 4-2 6-5 6s-5-2-5-6V3ZM7 5H3v3c0 3 2 4 5 4M17 5h4v3c0 3-2 4-5 4M12 14v5M7 22h10M9 19h6"/></symbol>
 <symbol id="i-bolt" viewBox="0 0 24 24"><path d="m14 2-10 12h7l-1 8 10-12h-7l1-8Z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-frost" viewBox="0 0 24 24"><path d="M12 2v20M3.3 7l17.4 10M3.3 17 20.7 7M8 4l4 4 4-4M8 20l4-4 4 4M3 11l5-1-1-5M21 13l-5 1 1 5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   </defs></svg>
 
 
@@ -137,6 +140,7 @@
         <div class="board" id="board" role="grid" aria-label="6 곱하기 6 밭뭉치 퍼즐. 이웃한 두 빛모습을 누르거나 밀어 교환하세요." aria-rowcount="6" aria-colcount="6">
           <div class="board-cells" id="board-cells" aria-hidden="true"></div>
           <div class="bud-layer" id="bud-layer" aria-hidden="true"></div>
+          <div class="terrain-layer" aria-hidden="true"></div>
           <div class="tiles" id="tiles"></div>
         </div>
         <canvas id="effects" aria-hidden="true"></canvas>
