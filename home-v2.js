@@ -16,13 +16,13 @@
     };
     return '<svg viewBox="0 0 100 88" aria-hidden="true"><ellipse cx="50" cy="76" rx="36" ry="7" fill="#59764d" opacity=".14"/>'+paths[item.kind]+'</svg>';
   }
-  function render(node,{profile,level,active,busy,ranked,identity,view='home',chapter,act}){
+  function render(node,{profile,level,definition,active,busy,ranked,identity,view='home',chapter,act}){
     const summary=root.LumiGarden.summary(profile),all=root.LumiJourney.restorationSummary(profile);
     const complete=profile.stars.filter(n=>n>0).length, fresh=!profile.hasSeenTutorial&&complete===0;
     const actual=Number.isInteger(chapter)?chapter:Math.ceil(level/10),region=all[actual-1];
     const itemMap=new Map(root.LumiGarden.catalog.map(i=>[i.id,i]));
     const equipped=region.projects.map(p=>itemMap.get(summary.garden.equipped[p.id])).filter(Boolean);
-    const def=root.LumiLevels[level-1],buddy=profile.selectedBuddy;
+    const def=definition||root.LumiLevelsV2[level-1],buddy=profile.selectedBuddy;
     const title=view==='garden'?'나의 햇살밭':'오늘도, 햇살 한 줌';
     const next=region.projects.find(p=>p.state!=='restored');
     const hero='<div class="v2-landscape"><div class="v2-landmark">'+root.LumiArt.landmark(actual,region.restored,'v2-land-'+(++serial),region.projects.map(p=>p.state==='restored'),Boolean(profile.stars[actual*10-1]))+'</div><div class="v2-cast">'+[buddy,(buddy+1)%6,(buddy+3)%6].map((t,i)=>'<span>'+root.LumiArt.sprite(t,'v2-friend-'+(++serial),'happy')+'</span>').join('')+'</div><div class="v2-placed">'+equipped.map(i=>'<span title="'+esc(i.name)+'">'+decoration(i)+'</span>').join('')+'</div><span class="v2-location">'+icon('leaf')+esc(root.LumiLevels.chapters[actual-1].title)+' · '+region.restored+'/3 복원</span></div>';
