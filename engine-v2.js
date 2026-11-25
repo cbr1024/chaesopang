@@ -336,21 +336,30 @@
         }
         if (this._legalMoves().length) return;
       }
-      // A guaranteed ABA / BAB pattern fits any supported board; fill around it
-      // while rejecting initial triples. This also handles unusually large palettes.
-      this.board = Array.from({ length: this.rows }, () => Array(this.cols).fill(null));
-      const motif = [[0, 1, 0], [2, 0, 2]];
-      for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
-        const preferred = r < 2 && c < 3 ? motif[r][c] : (r + c) % this.types;
-        let type = preferred;
-        for (let n = 0; n < this.types; n++) {
-          type = (preferred + n) % this.types;
-          if (c > 1 && color(this.board[r][c - 1]) === type && color(this.board[r][c - 2]) === type) continue;
-          if (r > 1 && color(this.board[r - 1][c]) === type && color(this.board[r - 2][c]) === type) continue;
-          break;
+      // Seed a legal three-match at an unfrozen swap pair before filling
+      // the remaining cells. Never leave an invalid or permanently dead board.
+      const triples=(r,c,type)=>[[0,1],[1,0]].some(([dr,dc])=>[-2,-1,0].some(offset=>{
+        const points=[0,1,2].map(i=>({r:r+(offset+i)*dr,c:c+(offset+i)*dc}));
+        return points.every(p=>this._inside(p))&&points.every(p=>p.r===r&&p.c===c||color(this.board[p.r][p.c])===type);
+      }));
+      for(let r=0;r<this.rows-1;r++)for(let c=0;c<this.cols;c++){
+        if(this._frozen({r,c})||this._frozen({r:r+1,c}))continue;
+        const left=Math.max(0,Math.min(this.cols-3,c-1)),idx=c-left;
+        this.board=Array.from({length:this.rows},()=>Array(this.cols).fill(null));
+        for(let k=0;k<3;k++){
+          this.board[r][left+k]=this._tile(k===idx?1:0);
+          this.board[r+1][left+k]=this._tile(k===idx?0:2);
         }
-        this.board[r][c] = this._tile(type);
+        let failed=false;
+        for(let rr=0;rr<this.rows;rr++)for(let cc=0;cc<this.cols;cc++){
+          if(this.board[rr][cc])continue;
+          const choices=Array.from({length:this.types},(_,i)=>(rr+cc+i)%this.types).filter(t=>!triples(rr,cc,t));
+          if(!choices.length){failed=true;break;}
+          this.board[rr][cc]=this._tile(choices[0]);
+        }
+        if(!failed&&!this.findMatches().length&&this._legalMoves().length)return;
       }
+      throw new Error('No safe board can be generated for this terrain.');
     }
 
     _legalMoves() {
@@ -623,11 +632,12 @@
       }
       const specials = original.filter(tile => tile.special).map(cloneTile);
       this._generateStableBoard();
-      for (let n = 0; n < specials.length; n++) {
-        const r = Math.floor(n / this.cols);
-        const c = n % this.cols;
-        this.board[r][c].special = specials[n].special;
-      }
+      // Keep all special kinds. Place the first at an accessible swap endpoint,
+      // so introducing a rainbow cannot accidentally destroy our only legal move.
+      const safe=this._legalMoves()[0].from;
+      const positions=[safe,...Array.from({length:this.rows*this.cols},(_,i)=>({r:Math.floor(i/this.cols),c:i%this.cols})).filter(p=>!equal(p,safe))];
+      for (let n=0;n<specials.length;n++){const p=positions[n];this.board[p.r][p.c].special=specials[n].special;}
+      if(this.findMatches().length||!this._legalMoves().length)throw new Error('Reshuffle produced an invalid board.');
       events.push(this._event('shuffle'));
     }
 
