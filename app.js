@@ -45,6 +45,7 @@
   const audio = new LumiAudio();
   let uid = 0;
   const art = (type, mood = 'idle') => LumiArt.sprite(type, 'ui-' + (++uid), mood);
+  let screen='play', gardenChapter=1;
   let game, level = 1, busy = false, blastMode = false, shuffles = 2, blasts = 2, maxCombo = 0;
   let storedSession = initial.session, modalType = null, pendingModal = null, returnFocus = null;
   let epoch = 0, hintTimer, toastTimer, buddyTimer, comboAnimation, comboTimer, scoreAnimation;
@@ -107,7 +108,7 @@
   }
   function controls() {
     const ended=game && (game.won || game.over);
-    view.setDisabled(sessionInterrupted || busy || Boolean(modalType) || ended);
+    view.setDisabled(sessionInterrupted || busy || screen!=='play' || Boolean(modalType) || ended);
     view.setBlastMode(blastMode);
     $('hint-button').disabled=busy || ended;
     $('shuffle-button').disabled=busy || ended || shuffles<1;
@@ -318,7 +319,7 @@
   function clearHints(){clearTimeout(hintTimer);view.clearHints();}
   function scheduleHint() {
     clearTimeout(hintTimer);
-    if(!game || game.won || game.over || busy || modalType || blastMode || document.hidden)return;
+    if(!game || game.won || game.over || busy || screen!=='play' || modalType || blastMode || document.hidden)return;
     hintTimer=setTimeout(()=>showHint(false),profile.hasSeenTutorial?9000:2000);
   }
   function showHint(manual=true) {
@@ -364,7 +365,8 @@
       fx.trail(from.x,from.y,rect.x+rect.width/2,rect.y+rect.height/2,'#e7a3c6','petal');
     }
   }
-  function commitTurn(before,action,valid) {
+  function commitTurn(before,action,valid,deferUi=false) {
+    const seedsBefore=LumiGarden.earned(profile);
     const placesBefore=game.won?LumiJourney.restorationSummary(profile).flatMap(c=>c.projects.filter(p=>p.state==='restored').map(p=>p.id)):[];
     if(rankRun && action && valid && !ranking.commitAction(action,game.exportState())) {
       rankRun=null;ranking.abandonRun();toast('이번 판은 연습 기록으로 남겨요');
@@ -387,6 +389,7 @@
       resultDetails={newBest:game.score>previous,starsAdded:profile.stars[level-1]-previousStars,
         friendship:{buddyType:friendType,beforeXp,afterXp,displayBeforeXp:Math.max(verifiedXp,beforeXp),displayAfterXp:LumiProgress.buddyTotal(profile,friendType,false),memoryBeforeLevel:Math.max(profile.buddyMemoryLevels?.[friendType]||1,LumiRewards.bond(Math.max(verifiedXp,beforeXp)).level),collectedXp:game.collected[friendType],clearXp,gainedXp}};
       resultDetails.journey=LumiJourney.finish(profile,level,journeyRun,true);
+      resultDetails.seedAward=Math.max(0,LumiGarden.earned(profile)-seedsBefore);
       resultDetails.restored=LumiJourney.restorationSummary(profile).flatMap(c=>c.projects.filter(p=>p.state==='restored'&&!placesBefore.includes(p.id)).map(p=>({...p,chapter:c.chapter})));
     }
     if(game.won && rankRun) {
@@ -398,14 +401,22 @@
         updateRankStatus();updateResultRanking();updateFriendshipResult();
       }).catch(error=>{if(submittingEpoch===epoch){rankSubmission={status:'error',error};updateResultRanking();updateFriendshipResult();}});
     } else if(game.over) {rankRun=null;ranking.abandonRun();}
-    rememberSession();sidebars();updateRankStatus();updateJourneyHUD();
+    rememberSession();if(!deferUi)refreshTurnUI();
+  }
+  function refreshTurnUI(){
+    sidebars();updateRankStatus();updateJourneyHUD();
     const placeState=LumiJourney.getRestoration(profile,Math.ceil(level/10));view.setChapter?.(placeState.chapter,placeState.restored,Boolean(profile.stars[placeState.chapter*10-1]));
   }
   async function playResult(result,before,action=null) {
     if(!result.events.length){scheduleHint();return;}
     const turnEpoch=epoch,focus=view.focusedPosition();
     busy=true;clearHints();dismissSpecialCoach();newSpecial=null;view.select(null);blastMode=false;controls();
-    if(result.valid)LumiJourney.recordResult(journeyRun,result);
+    if(result.valid){
+      LumiJourney.recordResult(journeyRun,result);
+      maxCombo=Math.max(maxCombo,...result.events.filter(e=>e.kind==='clear').map(e=>e.combo||0));
+      // Commit the stable, authoritative board and rewards before the first animation await.
+      commitTurn(before,action,true,true);
+    }
     try {
       for(const event of result.events){
         if(turnEpoch!==epoch)return;
@@ -437,7 +448,7 @@
       console.error('Lumi animation recovered:',error);await view.render(game.snapshot());
     }
     if(turnEpoch!==epoch)return;
-    const snapshot=game.snapshot();hud(snapshot);commitTurn(before,action,result.valid);
+    const snapshot=game.snapshot();hud(snapshot);refreshTurnUI();
     const turnCombo=Math.max(0,...result.events.filter(event=>event.kind==='clear').map(event=>event.combo||0));
     $('announcer').textContent=fmt(snapshot.score)+'점, '+snapshot.moves+'회 남음. '+(turnCombo>1?turnCombo+'연쇄. ':'')+snapshot.objectives.map(g=>LumiArt.names[g.type]+' '+Math.max(0,g.target-g.current)+'개 남음').join(', ');
     if(snapshot.won || snapshot.over){
@@ -474,7 +485,7 @@
     const before=game.collected.slice();LumiMobile.feedback();playResult(game.play(from,to),before,{kind:'swap',from:{...from},to:{...to}});
   }
 
-  async function startGarden(id,restore=null) {
+  async function startGarden(id,restore=null,{ranked=false,silent=false}={}) {
     if(sessionInterrupted || !sessionGuard.canWrite())return;
     epoch++;busy=true;modalType=null;pendingModal=null;blastMode=false;goalsSignature='';rankSubmission=null;rankStartIssue=null;rankRun=null;
     const loadingEpoch=epoch;$('board-wrap').classList.add('board-loading');
@@ -492,7 +503,10 @@
     } else {
       profile.attempts[level-1]++;
       let startedRun=null;
-      try {if(ranking.getIdentity() && navigator.onLine!==false) startedRun=await ranking.startRun(level,{buddyType:profile.selectedBuddy});} catch(error) {
+      try {
+        if(ranked){if(!ranking.getIdentity()||navigator.onLine===false)throw Object.assign(new Error('인터넷 연결과 닉네임이 필요해요. 이번 판은 싱글 플레이예요.'),{code:'RANKING_OFFLINE'});startedRun=await ranking.startRun(level,{buddyType:profile.selectedBuddy});}
+        else if(ranking.getCurrentRun())ranking.abandonRun();
+      } catch(error) {
         if(loadingEpoch!==epoch)return;
         rankStartIssue={code:error.code||'NETWORK_ERROR',message:error.message||'랭킹 서버 연결에 실패했어요. 이번 판은 연습으로 진행돼요.'};
         ranking.abandonRun();
@@ -520,17 +534,14 @@
     await view.render(game.snapshot(),'entry');
     if(gardenEpoch!==epoch)return;
     busy=false;controls();scheduleHint();
+    if(silent)return;
     if(rankStartIssue)toast(rankStartIssue.message,4500);
     else if(initial.migrationNotice){toast(initial.migrationNotice,3800);initial.migrationNotice=null;}
     else if(restore)toast(game.scoringVersion===LumiRewards.SCORING_VERSION?'친구들이 기다렸어요. 이어서 놀아볼까요?':'기존 판을 이어가요. 새 보너스와 랭킹은 다음 판부터!',4000);
     else if(game.budsGoal)toast(definition.buds.some(b=>b.hp>1)?'두 겹 봉오리는 같은 자리에서 두 번, 톡톡!':'봉오리 위에서 빛모습을 모으면 꽃이 피어요',3000);
     if(pendingModal){const next=pendingModal;pendingModal=null;showModal(next.type,next.data);}
     else if(!restore)buddy('wink',game.perks.startScore?'오늘의 응원 선물 +'+fmt(game.perks.startScore)+'점!':LumiArt.characters[profile.selectedBuddy].tagline,'selected');
-    if(!modalType){
-      const chapter=LumiStory.chapterForLevel(level);
-      if(!profile.storySeen.prologue)showModal('story',{phase:'prologue'});
-      else if(!restore && (level-1)%10===0 && !profile.storySeen.openings[chapter.id-1])showModal('story',{chapter:chapter.id,phase:'opening'});
-    }
+    // Stories remain available from the map, result and friend menus; never block a first match.
   }
 
   // Dialogs are actual game features, not links to placeholder pages.
@@ -545,8 +556,9 @@
     document.body.classList.remove('modal-open');
     fx.setPaused(document.hidden);audio.suspend(document.hidden);
     controls();
-    if(game && (game.won||game.over))revealFinishActions();
-    else if(returnFocus?.isConnected)returnFocus.focus({preventScroll:true});
+    if(screen!=='play'){if(returnFocus?.isConnected&&returnFocus.getClientRects().length)returnFocus.focus({preventScroll:true});else $('v2-heading')?.focus({preventScroll:true});}
+    else if(game && (game.won||game.over))revealFinishActions();
+    else if(returnFocus?.isConnected&&returnFocus.getClientRects().length)returnFocus.focus({preventScroll:true});
     else if(game && !game.won && !game.over)view.focusAt({r:0,c:0});
     scheduleHint();
   }
@@ -558,7 +570,49 @@
       $('finish-next').focus({preventScroll:true});
     });
   }
-  function openGarden(id) { closeModal();startGarden(id).then(()=>{if(!modalType)view.focusAt({r:0,c:0});}); }
+  function renderHome(){
+    const active=Boolean(game&&!game.won&&!game.over),next=active?level:Math.min(TOTAL,profile.unlocked);
+    LumiHome.render($('v2-home'),{profile,level:next,active,busy,ranked:active&&Boolean(rankRun),identity:ranking.getIdentity(),view:screen,chapter:screen==='garden'?gardenChapter:Math.ceil(next/10),act:homeAct});
+  }
+  function setScreen(next,focus=true){
+    if(sessionInterrupted||busy||backupBusy||recoveryBusy)return;
+    screen=next;document.body.dataset.v2Screen=screen;
+    const playing=screen==='play';$('v2-home').hidden=playing;$('v2-nav').hidden=playing;$('v2-playfield').hidden=!playing;$('v2-home-back').hidden=!playing;
+    $('v2-nav').querySelectorAll('[data-v2-nav]').forEach(b=>{if(b.dataset.v2Nav===screen)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
+    clearHints();controls();
+    if(playing){view.measure();if(game)view.render(game.snapshot());scheduleHint();if(focus&&!modalType)view.focusAt({r:0,c:0});}
+    else{renderHome();if(focus)$('v2-heading')?.focus({preventScroll:true});}
+    window.scrollTo({top:0,behavior:'instant'});
+  }
+  function homeMessage(message){const n=$('v2-home').querySelector('.v2-home-status');if(n)n.textContent=message;}
+  function applyGarden(op,id){
+    if(sessionInterrupted||busy||!sessionGuard.canWrite())return;
+    const item=LumiGarden.catalog.find(i=>i.id===id);if(!item)return;
+    const result=op==='purchase'?LumiGarden.purchase(profile,id):op==='equip'?LumiGarden.equip(profile,id):LumiGarden.unequip(profile,item.slot);
+    if(!result.ok){homeMessage(result.code==='INSUFFICIENT'?'햇살씨앗이 더 필요해요.':'아직 꾸밀 수 없는 소품이에요.');return;}
+    const previous=profile.garden;profile.garden=result.garden;
+    if(!persist()){profile.garden=previous;homeMessage('저장하지 못했어요. 소품과 씨앗은 그대로예요.');return;}
+    if(modalType)closeModal();renderHome();homeMessage(op==='unequip'?'소품을 보관했어요.':item.name+'을(를) 배치했어요!');audio.play('collect');
+  }
+  function homeAct(action,value){
+    if(sessionInterrupted||busy||modalType)return;
+    unlockAudio();
+    if(action==='play'){if(game&&!game.won&&!game.over)setScreen('play');else openGarden(Math.min(TOTAL,profile.unlocked));}
+    else if(action==='home'||action==='garden'){if(action==='garden')gardenChapter=Math.ceil((game&&!game.won&&!game.over?level:profile.unlocked)/10);setScreen(action);}
+    else if(action==='chapter'){gardenChapter=Math.max(1,Math.min(5,value));renderHome();$('v2-home').querySelector('[data-chapter="'+gardenChapter+'"]')?.focus({preventScroll:true});}
+    else if(action==='purchase')showModal('garden-item',{id:value});
+    else if(action==='equip'||action==='unequip')applyGarden(action,value);
+    else if(['map','album','ranking'].includes(action))showModal(action);
+  }
+  function gardenItemModal(id){
+    const item=LumiGarden.catalog.find(i=>i.id===id);if(!item){closeModal();return;}
+    const summary=LumiGarden.summary(profile);
+    modalHeader('SUNPATCH DECORATION',item.name,'happy',null);
+    $('modal-content').innerHTML='<div class="v2-item-preview">'+LumiHome.decoration(item)+'</div><p>햇살씨앗 '+item.price+'개로 소품을 얻어요.<br>한 번 얻으면 언제든 무료로 배치하거나 보관할 수 있어요.</p><p>현재 '+summary.balance+'개 · 구매 후 '+Math.max(0,summary.balance-item.price)+'개</p>';
+    modalButton(item.price+' 씨앗으로 얻고 배치하기',()=>applyGarden('purchase',id),true);modalButton('조금 더 둘러보기',closeModal);
+  }
+  function openGarden(id,ranked=false) { closeModal();setScreen('play',false);startGarden(id,null,{ranked}).then(()=>{if(!modalType&&screen==='play')view.focusAt({r:0,c:0});}); }
+  function goHome(){if(sessionInterrupted||busy||backupBusy||recoveryBusy)return;if(modalType)closeModal();persist();setScreen('home');}
   function modalHeader(eyebrow,title,mood='idle',type=profile.selectedBuddy) {
     $('modal-eyebrow').textContent=eyebrow;$('modal-title').textContent=title;
     $('modal-art').innerHTML=type===null?'':art(type,mood);
@@ -572,12 +626,19 @@
     $('modal').className='modal';$('modal-content').replaceChildren();$('modal-actions').replaceChildren();
     $('modal-art').style.display='';$('modal-art').innerHTML='';
     $('modal').scrollTop=0;
-    if(type==='help') helpModal();
+    if(type==='garden-item') gardenItemModal(data.id);
+    else if(type==='ranked-start'){
+      modalHeader('SUNPATCH LEAGUE','랭킹 도전 시작','happy',null);
+      $('modal-content').innerHTML='<p>서버가 발급한 새로운 퍼즐로 도전해요. 지금 진행 중인 판은 종료되지만 별과 정원, 친구 기록은 그대로 유지됩니다.</p><p class="save-note">현재 리그는 기존 친밀도 규칙을 사용해요. 동일 조건 경쟁 모드는 다음 룰셋에서 별도로 제공됩니다.</p>';
+      modalButton('새 랭킹 판 시작',()=>openGarden(data.id||level,true),true);modalButton('돌아가기',()=>showModal('ranking'));
+    }
+    else if(type==='help') helpModal();
     else if(type==='score-info') scoreInfoModal();
     else if(type==='pause') {
       modalHeader('TAKE A LITTLE BREATH','잠깐, 몽글몽글 쉬어요','sleep');
       $('modal-content').innerHTML='<p>서두르지 않아도 괜찮아요.<br>친구들이 여기서 기다릴게요.</p><p class="save-note">지금까지의 진행은 자동으로 저장됐어요.</p>';
       modalButton('이어서 놀기',closeModal,true);
+      modalButton('홈으로 돌아가기',goHome);
       modalButton('이 정원 새로 시작',()=>showModal('restart'));
       audio.suspend(true);
     }
@@ -619,7 +680,7 @@
   function updateRankStatus() {
     const active=Boolean(rankRun);
     const recovery=ranking.getRecoveryState();
-    $('rank-mode').textContent=recovery.required?'계정 확인 필요':active?'랭킹 도전':!ranking.getIdentity()?'랭킹 가입':rankStartIssue?.code==='RULESET_CHANGED'?'업데이트 필요':ranking.pendingCount?'제출 대기 '+ranking.pendingCount:'연습 · 미인증';
+    $('rank-mode').textContent=recovery.required?'계정 확인 필요':active?'랭킹 도전':rankStartIssue?.code==='RULESET_CHANGED'?'업데이트 필요':ranking.pendingCount?'제출 대기 '+ranking.pendingCount:'싱글 플레이';
     $('rank-mode').classList.toggle('connected',active);
     $('rank-mode').setAttribute('aria-label',active?'서버 검증 랭킹 도전 중':rankStartIssue?.message||'랭킹 상태와 기록 보기');
     $('header-ranking').classList.toggle('has-pending',ranking.pendingCount>0);
@@ -719,7 +780,8 @@
       '<div id="ranking-own"></div><p class="ranking-reset" id="ranking-reset"></p><p class="ranking-legacy" id="ranking-legacy"></p>'+
       '<details class="ranking-profile"><summary>'+icon('settings')+'랭킹 이름 · 기록 안내</summary><form id="nickname-form"><label for="nickname-input">다른 친구에게 보이는 이름</label><div><input id="nickname-input" name="nickname" maxlength="16" minlength="2" autocomplete="off" spellcheck="false" value="'+esc(identity?.nickname||'')+'" placeholder="정원에서 사용할 이름" required><button type="submit">저장</button></div><p id="nickname-status" role="status"></p></form><p>전체 모험은 정원별 최고 점수의 합이에요. 같은 정원을 반복해도 점수는 중복 가산되지 않아요. 완성한 정원의 검증된 기록만 반영돼요.</p><p>이번 주는 월요일 오전 9시(한국 시간)에 새로 시작해요. 시작한 주의 기록으로 집계되며 72시간 안에 제출해야 해요.</p></details>';
     $('modal-actions').replaceChildren();
-    modalButton(game?.won?'결과로 돌아가기':'정원으로 돌아가기',()=>game?.won?showModal('win'):closeModal(),true);
+    modalButton('현재 단계 랭킹 도전',()=>showModal('ranked-start',{id:Math.min(TOTAL,profile.unlocked)}),true);
+    modalButton(screen==='play'?'퍼즐로 돌아가기':'홈으로 돌아가기',closeModal);
     for(const button of $('modal-content').querySelectorAll('[data-scope]'))button.addEventListener('click',()=>{rankScope=button.dataset.scope;rankingModal();});
     for(const button of $('modal-content').querySelectorAll('[data-period]'))button.addEventListener('click',()=>{rankPeriod=button.dataset.period;rankingModal();});
     $('ranking-stage')?.addEventListener('change',e=>{rankStage=Number(e.target.value);rankingModal();});
@@ -891,12 +953,13 @@
         (win&&snapshot.scoringVersion===4?'<div class="bonus-row"><dt>남은 이동 보너스<small>'+game.moves+'회 × '+fmt(parts.moveValue)+'점</small></dt><dd>+'+fmt(parts.moveBonus)+'</dd></div>':'')+
         (parts.efficiencyBonus?'<div class="bonus-row"><dt>10회 여유 클리어 선물</dt><dd>+'+fmt(parts.efficiencyBonus)+'</dd></div>':'')+'</dl>':'')+
       '<div class="result-detail"><div><span>남은 횟수</span><strong>'+game.moves+'</strong></div><div><span>최고 연쇄</span><strong>×'+maxCombo+'</strong></div><div><span>피운 꽃</span><strong>'+game.bloomed+'</strong></div></div>'+
-      '<div class="result-goals">'+goals+'</div>'+journeyResultCard(win)+(win?chapterResultCard()+'<div id="result-friendship" class="result-friendship"></div>':'<p>남은 목표를 먼저 보고, 특수 빛모습을 가까이 옮겨봐요.</p>');
+      '<div class="result-goals">'+goals+'</div>'+(win?'<div class="v2-reward">'+icon('leaf')+'<div><strong>'+(resultDetails.seedAward?'햇살씨앗 +'+resultDetails.seedAward:'이미 받은 보상')+'</strong><small>현재 '+LumiGarden.summary(profile).balance+'개 · 새 클리어, 별, 약속으로 모아요.</small></div></div>':'')+journeyResultCard(win)+(win?chapterResultCard()+'<div id="result-friendship" class="result-friendship"></div>':'<p>남은 목표를 먼저 보고, 특수 빛모습을 가까이 옮겨봐요.</p>');
     wireStoryLinks();wireWorldLinks();
     if(win && level<TOTAL)modalButton('다음 단계로 →',()=>openGarden(level+1),true);
     else modalButton(win?'햇살밭 지도 둘러보기':'다시 만나러 가기',()=>win?showModal('map'):openGarden(level),true);
     const rankPanel=document.createElement('div');rankPanel.id='result-ranking';rankPanel.className='result-ranking';$('modal-content').appendChild(rankPanel);updateResultRanking();
-    if(win)modalButton('내 랭킹 확인',()=>showModal('ranking'));
+    if(win&&rankRun)modalButton('내 랭킹 확인',()=>showModal('ranking'));
+    modalButton('홈으로 돌아가기',goHome);
     modalButton(win?'이 정원 한 번 더':'햇살밭 지도 보기',()=>win?openGarden(level):showModal('map'));
     updateFriendshipResult();
   }
@@ -1114,8 +1177,9 @@
       '</div><div class="level-info">이동 '+def.moves+'번 · 최고 기록 '+fmt(profile.bestScores[id-1])+'점</div>'+
       '<p class="level-strategy"><strong>'+esc(def.difficultyLabel)+' · '+('●'.repeat(def.rating||1))+'</strong><br>'+esc(def.recommendedSkill||def.intent||'세 친구의 만남을 찾아보세요.')+'</p>'+
       '<div class="result-stars">'+starMarkup(profile.stars[id-1])+'</div>'+promiseCard(id,id===level?journeyRun:null);
-    if(id===level && !game.won && !game.over)modalButton('이어서 놀기',closeModal,true);
+    if(id===level && game&&!game.won&&!game.over)modalButton('이어서 놀기',()=>{closeModal();setScreen('play');},true);
     else modalButton('이 정원에서 놀기',()=>openGarden(id),true);
+    if(ranking.getIdentity())modalButton('이 단계 랭킹 도전',()=>showModal('ranked-start',{id}));
     modalButton('햇살밭 지도로',()=>showModal('map'));
   }
   function albumModal() {
@@ -1209,6 +1273,8 @@
     modalButton('이대로 좋아요',closeModal,true);
   }
 
+  $('v2-home-back').addEventListener('click',goHome);
+  $('v2-nav').addEventListener('click',event=>{const button=event.target.closest('[data-v2-nav]');if(button)homeAct(button.dataset.v2Nav);});
   $('hint-button').addEventListener('click',()=>showHint(true));
   $('coach-dismiss').addEventListener('click',()=>dismissSpecialCoach(true));
   $('score-help').addEventListener('click',()=>showModal('score-info'));
@@ -1234,7 +1300,8 @@
   $('promise-button').addEventListener('click',()=>showModal('promise'));
   $('side-world-button').addEventListener('click',()=>showModal('world'));
   $('settings-button').addEventListener('click',()=>showModal('settings'));
-  for(const id of ['brand-button','stars-button','stage-map-button','map-button'])$(id).addEventListener('click',()=>showModal('map'));
+  $('brand-button').addEventListener('click',goHome);
+  for(const id of ['stars-button','stage-map-button','map-button'])$(id).addEventListener('click',()=>showModal('map'));
   for(const id of ['album-button','side-album-button'])$(id).addEventListener('click',()=>showModal('album'));
   $('friend-card').addEventListener('click',()=>{
     const lines=[LumiArt.characters[profile.selectedBuddy].tagline,'너랑 함께면 매일이 소풍 같아!','작은 행복도, 같이 모아보자.','잘하고 있어. 우리 천천히 가자!'];
@@ -1264,11 +1331,12 @@
     if(document.hidden)clearHints();else scheduleHint();
   });
   window.addEventListener('pagehide',()=>{persist();sessionGuard.release();});
-  window.addEventListener('lumi:back',()=>modalType?closeModal():showModal('pause'));
+  window.addEventListener('lumi:back',()=>modalType?closeModal():screen==='play'?showModal('pause'):screen==='garden'?goHome():undefined);
   window.addEventListener('lumi:app-state',e=>{if(sessionInterrupted){fx.setPaused(true);audio.suspend(true);return;}persist();audio.suspend(!e.detail.active||modalType==='pause');fx.setPaused(!e.detail.active||Boolean(modalType&&modalType!=='win'));if(!e.detail.active)clearHints();else{scheduleHint();retryRankings();}});
   window.addEventListener('online',retryRankings);
   retryRankings();
-  await startGarden(initial.session?.level || profile.unlocked,initial.session);
+  await startGarden(initial.session?.level || profile.unlocked,initial.session,{silent:true});
+  if(!sessionInterrupted&&!modalType)setScreen('home',false);
 })().catch(error=>{
   console.error('Chaeso Pang startup:',error);
   window.LumiSession?.current?.release();
