@@ -1,6 +1,7 @@
 /* Real-browser regression tests. The live ranking endpoint is never contacted. */
 'use strict';
 const { chromium, webkit } = require('playwright');
+const QA_ENGINE=process.env.QA_ENGINE||'chromium';
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
@@ -29,7 +30,7 @@ function stageFixture(level,extras={}){
   Object.assign(d.profile,extras);return {version:3,...d};
 }
 async function boot(browser,origin,width,height,{fixture=null,engine='chromium',reducedMotion='reduce'}={}){
-  const ctx=await browser.newContext({viewport:{width,height},deviceScaleFactor:2,isMobile:true,hasTouch:true,reducedMotion,locale:'ko-KR'});
+  const ctx=await browser.newContext({viewport:{width,height},deviceScaleFactor:2,isMobile:true,hasTouch:true,reducedMotion,locale:'ko-KR',...(reducedMotion==='no-preference'?{recordVideo:{dir:path.join(OUT,'motion-video'),size:{width,height}}}:{})});
   const unexpected=[],errors=[];
   await ctx.route('**/*',route=>{
     if(new URL(route.request().url()).origin===origin)return route.continue();
@@ -75,15 +76,23 @@ async function touchMove(env,swipe=false){
   return before;
 }
 async function verify(env,tag){
-  assert.deepEqual(env.errors,[],tag+' browser errors');assert.deepEqual(env.unexpected,[],tag+' unexpected network calls');results.push({tag,pass:true});await env.ctx.close();
+  assert.deepEqual(env.errors,[],tag+' browser errors');assert.deepEqual(env.unexpected,[],tag+' unexpected network calls');results.push({tag,pass:true});console.log('PASS '+tag);await env.ctx.close();
 }
 (async()=>{
   await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
+  if(QA_ENGINE==='webkit'){
+    const b=await webkit.launch({headless:true,env:{...process.env,LIBGL_ALWAYS_SOFTWARE:'1',WEBKIT_DISABLE_COMPOSITING_MODE:'1',WEBKIT_DISABLE_DMABUF_RENDERER:'1'}});
+    try{
+      const baseline=await b.newPage();await baseline.goto('data:text/html,<h1>WebKit baseline</h1>');assert.equal(await baseline.locator('h1').textContent(),'WebKit baseline');await baseline.close();results.push({tag:'WebKit baseline document',pass:true});console.log('PASS WebKit baseline document');
+      const env=await boot(b,origin,390,844,{engine:'webkit'});await env.page.locator('[data-action=play]').tap();await touchMove(env);await idle(env.page);await env.page.screenshot({path:path.join(OUT,'webkit-play.png'),fullPage:true});await verify(env,'WebKit mobile tap');
+    }finally{await b.close();}
+    return;
+  }
   const browser=await chromium.launch({headless:true});
   try{
     for(const [w,h] of [[320,568],[360,740],[390,844],[430,932]]){
       const env=await boot(browser,origin,w,h);const {page}=env;await checkLayout(page,w,'home');await page.screenshot({path:path.join(OUT,'home-'+w+'.png'),fullPage:true});
-      await page.locator('[data-action=play]').tap();await idle(page);await checkLayout(page,w,'play');await page.screenshot({path:path.join(OUT,'play-'+w+'.png'),fullPage:true});
+      await page.locator('[data-action=play]').tap();await idle(page);await checkLayout(page,w,'play');if(w===320){const hint=await page.locator('#hint-button').boundingBox();assert(hint.y+hint.height<=h+3,'320px boosters below first viewport '+JSON.stringify(hint));}await page.screenshot({path:path.join(OUT,'play-'+w+'.png'),fullPage:true});
       const before=await touchMove(env,w===390);await idle(page);const after=await saved(page);assert(after.session.game.moves===before.moves-1);
       await page.locator('#v2-home-back').tap();await page.waitForFunction(()=>document.body.dataset.v2Screen==='home');
       await page.reload();await page.waitForFunction(()=>document.body.dataset.v2Screen==='home');assert((await saved(page)).session.game.moves===before.moves-1);
@@ -127,6 +136,22 @@ async function verify(env,tag){
       assert(await page.locator('.v2-friend-card .v2-worn-item').count()>0);
       await verify(env,'cosmetic unlock, greeting and restoration');
     }
+    {
+      const fixture=stageFixture(25),model=Game.fromState(fixture.session.game),pair=model.legalMoves().find(x=>!model.terrain[x.from.r][x.from.c]&&!model.terrain[x.to.r][x.to.c]);
+      model.board[pair.from.r][pair.from.c].special='row';model.board[pair.to.r][pair.to.c].special='bomb';fixture.session.game=model.exportState();
+      const env=await boot(browser,origin,390,844,{fixture,reducedMotion:'no-preference'}),{page,ctx}=env;
+      await page.locator('[data-action=play]').tap();await idle(page);
+      await page.evaluate(()=>{window.__qaCombos=[];new MutationObserver(()=>window.__qaCombos.push(document.querySelector('#combo-label').textContent)).observe(document.querySelector('#combo-label'),{childList:true,subtree:true,characterData:true});});
+      const a=await point(page,pair.from),b=await point(page,pair.to),cdp=await ctx.newCDPSession(page),t=Date.now();
+      await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[a]});
+      for(let n=1;n<=4;n++)await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:a.x+(b.x-a.x)*n/4,y:a.y+(b.y-a.y)*n/4}]});
+      await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await cdp.detach();
+      await page.waitForFunction(()=>window.__qaCombos.includes('꽃비 폭풍!'),{},{timeout:5000});
+      await page.screenshot({path:path.join(OUT,'combo-motion.png'),fullPage:false});
+      await idle(page);const end=await saved(page);assert.equal(end.session.game.moves,fixture.session.game.moves-1);
+      results.push({tag:'normal motion special combo',durationMs:Date.now()-t,pass:true});
+      await verify(env,'normal-motion swipe settles without error');
+    }
     const env=await boot(browser,origin,390,844,{fixture:stageFixture(4)});const {page}=env;
     await page.locator('[data-v2-nav=garden]').tap();await page.waitForFunction(()=>document.body.dataset.v2Screen==='garden');
     const initial=await saved(page),item=Garden.catalog[0];assert(Garden.summary(initial.profile).balance>=item.price);
@@ -138,8 +163,4 @@ async function verify(env,tag){
     await page.reload();await page.waitForFunction(()=>document.body.dataset.v2Screen==='home');assert.equal((await saved(page)).profile.garden.equipped[item.slot],item.id);
     await page.locator('[data-v2-nav=ranking]').tap();await page.waitForSelector('#nickname-input');assert.equal(await page.locator('#nickname-input').inputValue(),'');await verify(env,'garden purchase persistence and optional ranking');
   }finally{await browser.close();}
-  if(process.env.QA_WEBKIT==='1'){
-    const b=await webkit.launch({headless:true});
-    try{const env=await boot(b,origin,390,844,{engine:'webkit'});await env.page.locator('[data-action=play]').tap();await touchMove(env);await idle(env.page);await verify(env,'WebKit mobile tap');}finally{await b.close();}
-  }
 })().then(()=>{fs.writeFileSync(path.join(OUT,'results.json'),JSON.stringify(results,null,2));console.log(JSON.stringify({passed:results.length,results},null,2));},error=>{console.error(error);fs.writeFileSync(path.join(OUT,'results.json'),JSON.stringify({results,error:String(error)},null,2));process.exitCode=1;}).finally(()=>server.close());
