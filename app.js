@@ -46,7 +46,7 @@
   let uid = 0;
   const art = (type, mood = 'idle') => LumiArt.sprite(type, 'ui-' + (++uid), mood);
   const portrait = (type,mood='happy') => LumiHome.portrait(profile,type,mood);
-  let screen='play', gardenChapter=1;
+  let screen='play', gardenChapter=1, mode='campaign', dailyDay=null;
   let game, level = 1, busy = false, blastMode = false, shuffles = 2, blasts = 2, maxCombo = 0;
   let storedSession = initial.session, modalType = null, pendingModal = null, returnFocus = null;
   let epoch = 0, hintTimer, toastTimer, buddyTimer, comboAnimation, comboTimer, scoreAnimation;
@@ -100,6 +100,7 @@
     return okay;
   }
   function rememberSession() {
+    if(mode==='daily')return persist();
     storedSession=game && !game.won && !game.over ? {level,game:game.exportState(),shuffles,blasts,maxCombo,journey:LumiJourney.createRun(level,journeyRun)} : null;
     return persist();
   }
@@ -108,11 +109,16 @@
     toastTimer=setTimeout(()=>$('board-toast').classList.remove('visible'),duration);
   }
   const isV2Game=()=>game instanceof LumiEngineV2.Game;
-  const activeDefinition=(id=level)=>id===level&&game&&!game.won&&!game.over&&!isV2Game()?LumiLevels[id-1]:LumiLevelsV2[id-1];
-  const terrainName=kind=>kind==='weed'?'잡초':'서리';
-  const terrainIcon=kind=>icon(kind==='weed'?'leaf':'frost');
+  const activeDefinition=(id=level)=>{
+    const state=storedSession?.level===id?storedSession.game:null;
+    if(state)return state.version!==LumiEngineV2.STATE_VERSION?LumiLevels[id-1]:state.rulesRevision===LumiEngineV2.FUN_REVISION?LumiLevelsFun[id-1]:LumiLevelsV2[id-1];
+    return LumiLevelsFun[id-1];
+  };
+  const coaching=()=>mode==='campaign'&&level===1&&isV2Game()&&!profile.stars[0]?LumiFun.introHint(game):null;
+  const terrainName=kind=>({weed:'잡초',frost:'서리',crate:'상자',delivery:'씨앗 운반'})[kind]||kind;
+  const terrainIcon=kind=>icon(({weed:'leaf',frost:'frost',crate:'crate',delivery:'seed'})[kind]||'leaf');
   function setHint(text) {
-    $('play-hint').textContent=text || (blastMode?'꽃비를 내릴 친구를 톡! 주변 3×3칸이 꽃피어요':profile.hasSeenTutorial?(activeDefinition()?.recommendedSkill||'남은 목표를 먼저 확인해요'):'같은 빛모습 3개를 나란히 모아보세요');
+    $('play-hint').textContent=text || (mode==='daily'?'15턴 안에 최대 점수! 오늘은 모두 같은 시작 보드를 사용해요.':coaching()?.text|| (blastMode?'꽃비를 내릴 친구를 톡! 주변 3×3칸이 꽃피어요':profile.hasSeenTutorial?(activeDefinition()?.recommendedSkill||'남은 목표를 먼저 확인해요'):'같은 빛모습 3개를 나란히 모아보세요'));
   }
   function controls() {
     const ended=game && (game.won || game.over);
@@ -120,8 +126,8 @@
     view.setBlastMode(blastMode);
     $('v2-home-back').disabled=busy || backupBusy || recoveryBusy;
     $('hint-button').disabled=busy || ended;
-    $('shuffle-button').disabled=busy || ended || shuffles<1;
-    $('blast-button').disabled=busy || ended || blasts<1;
+    $('shuffle-button').disabled=busy || ended || mode==='daily' || shuffles<1;
+    $('blast-button').disabled=busy || ended || mode==='daily' || blasts<1;
     $('shuffle-count').textContent=shuffles; $('blast-count').textContent=blasts;
     $('shuffle-button').setAttribute('aria-label','보드 섞기, '+shuffles+'회 남음');
     $('blast-button').setAttribute('aria-label','마법 터뜨리기, '+blasts+'회 남음');
@@ -132,6 +138,7 @@
     $('finish-dock').hidden=!finished;
     document.body.classList.toggle('has-finished',finished);
     if(finished){
+      if(mode==='daily'){$('finish-dock-title').textContent='오늘의 도전 완료!';$('finish-dock-stars').innerHTML=starMarkup(LumiFun.medal(game.score));$('finish-next').textContent='도전 기록 보기 →';return;}
       $('finish-dock-title').textContent=game.won?'정원이 활짝 피었어요!':'조금만 더, 함께 해봐요';
       $('finish-dock-stars').innerHTML=game.won?starMarkup(game.stars):icon('heart');
       $('finish-next').innerHTML=(game.won?(level<TOTAL?'다음 단계로':'햇살밭 지도 보기'):'다시 도전')+' <span aria-hidden="true">→</span>';
@@ -143,12 +150,13 @@
   }
   function prepareGoals(snapshot) {
     const terrainGoals=Object.entries(snapshot.terrainGoal||{}).filter(([,n])=>n>0);
-    const signature=snapshot.objectives.map(g=>g.type+':'+g.target).join('|')+'|'+snapshot.budsGoal+'|'+JSON.stringify(terrainGoals);
+    const signature=mode+'|'+snapshot.objectives.map(g=>g.type+':'+g.target).join('|')+'|'+snapshot.budsGoal+'|'+JSON.stringify(terrainGoals)+'|'+(snapshot.deliveryGoal||0);
     if(signature===goalsSignature)return;
     goalsSignature=signature;
+    if(mode==='daily'){$('mission-goals').innerHTML='<div class="daily-score-goal">'+icon('trophy')+'<span>최고 점수 도전</span></div>';$('mission-goals').classList.remove('many');return;}
     $('mission-goals').innerHTML=snapshot.objectives.map(g=>'<div class="mission-goal" id="goal-'+g.type+'"><span class="goal-art">'+art(g.type)+'</span><strong>'+g.target+'</strong></div>').join('')+
-      (snapshot.budsGoal?'<div class="mission-goal" id="goal-buds"><span class="goal-art goal-bud">'+icon('flower')+'</span><strong>'+snapshot.budsGoal+'</strong></div>':'')+terrainGoals.map(([kind,n])=>'<div class="mission-goal" id="goal-terrain-'+kind+'"><span class="goal-art goal-'+kind+'">'+terrainIcon(kind)+'</span><strong>'+n+'</strong></div>').join('');
-    $('mission-goals').classList.toggle('many',snapshot.objectives.length+(snapshot.budsGoal?1:0)+terrainGoals.length>=4);
+      (snapshot.budsGoal?'<div class="mission-goal" id="goal-buds"><span class="goal-art goal-bud">'+icon('flower')+'</span><strong>'+snapshot.budsGoal+'</strong></div>':'')+terrainGoals.map(([kind,n])=>'<div class="mission-goal" id="goal-terrain-'+kind+'"><span class="goal-art goal-'+kind+'">'+terrainIcon(kind)+'</span><strong>'+n+'</strong></div>').join('')+(snapshot.deliveryGoal?'<div class="mission-goal" id="goal-delivery"><span class="goal-art goal-delivery">'+terrainIcon('delivery')+'</span><strong>'+snapshot.deliveryGoal+'</strong></div>':'');
+    $('mission-goals').classList.toggle('many',snapshot.objectives.length+(snapshot.budsGoal?1:0)+terrainGoals.length+(snapshot.deliveryGoal?1:0)>=4);
   }
   function updateGoal(node,remaining,label) {
     if(!node)return;
@@ -164,6 +172,7 @@
     for(const goal of snapshot.objectives) updateGoal($('goal-'+goal.type),Math.max(0,goal.target-goal.current),LumiArt.names[goal.type]+'의 팡빛 모으기');
     if(snapshot.budsGoal)updateGoal($('goal-buds'),Math.max(0,snapshot.budsGoal-snapshot.bloomed),'꽃봉오리 피우기');
     for(const [kind,n] of Object.entries(snapshot.terrainRemaining||{}))if(snapshot.terrainGoal[kind])updateGoal($('goal-terrain-'+kind),n,terrainName(kind)+' 제거');
+    if(snapshot.deliveryGoal)updateGoal($('goal-delivery'),snapshot.deliveryRemaining,'씨앗 운반');
     const from=shownScore,to=snapshot.score,start=performance.now();
     if (to!==scoreTarget || instant) {
     scoreTarget=to; cancelAnimationFrame(scoreAnimation);
@@ -174,25 +183,27 @@
     }; tick(start);
     }
     $('moves').textContent=snapshot.moves; $('moves').classList.toggle('low',snapshot.moves<=5 && !snapshot.won);
-    const thresholds=snapshot.starThresholds||LumiRewards.starThresholds(snapshot.target);
+    const thresholds=mode==='daily'?LumiFun.THRESHOLDS:(snapshot.starThresholds||LumiRewards.starThresholds(snapshot.target));
     const benchmark=thresholds[2];
     $('progress-fill').style.width=Math.min(100,snapshot.score/benchmark*100)+'%';
     $('score-progress').setAttribute('aria-valuemax',Math.round(benchmark));
     $('score-progress').setAttribute('aria-valuenow',Math.min(snapshot.score,Math.round(benchmark)));
     document.querySelectorAll('.progress-star').forEach((n,i)=>{
-      const earned=snapshot.won?i<snapshot.stars:!snapshot.over&&snapshot.score>=thresholds[i];
+      const earned=mode==='daily'?snapshot.score>=thresholds[i]:snapshot.won?i<snapshot.stars:!snapshot.over&&snapshot.score>=thresholds[i];
       const wasEarned=n.classList.contains('earned');
       n.classList.toggle('earned',earned);n.style.left=(thresholds[i]/benchmark*100)+'%';
       n.querySelector('small').textContent=fmt(thresholds[i]);
       n.setAttribute('aria-label','별 '+(i+1)+'개 점수선 '+fmt(thresholds[i])+'점'+(earned?(snapshot.won?' · 획득':' · 점수선 도달'):''));
       if(earned&&!wasEarned&&!instant)pulse(n.querySelector('svg'));
     });
-    const failed=snapshot.over&&!snapshot.won;
-    const next=failed?null:snapshot.won?(snapshot.stars<3?{stars:snapshot.stars+1,remaining:Math.max(0,thresholds[snapshot.stars]-snapshot.score)}:null):LumiRewards.nextStar(snapshot.score,snapshot.target);
+    const failed=mode!=='daily'&&snapshot.over&&!snapshot.won;
+    const dailyIndex=thresholds.findIndex(n=>n>snapshot.score);
+    const next=mode==='daily'?(dailyIndex<0?null:{stars:dailyIndex+1,remaining:thresholds[dailyIndex]-snapshot.score}):failed?null:snapshot.won?(snapshot.stars<3?{stars:snapshot.stars+1,remaining:Math.max(0,thresholds[snapshot.stars]-snapshot.score)}:null):LumiRewards.nextStar(snapshot.score,snapshot.target);
     $('next-star').innerHTML=failed?'<strong>미션을 완성하면 별을 받아요.</strong> 다시 함께 도전해요'
       :next?'별 <strong>'+next.stars+'개</strong>까지 <strong>'+fmt(next.remaining)+'점</strong>'
       :snapshot.won?'<strong>별 3개 획득!</strong> 새로운 최고 기록에 도전해요'
       :'<strong>별 3개 점수선 도달!</strong> 남은 미션을 완성해요';
+    if(mode==='daily')$('next-star').textContent=dailyIndex<0?'금메달 점수선 달성! 최고 기록을 높여요.':['동메달','은메달','금메달'][dailyIndex]+'까지 '+fmt(thresholds[dailyIndex]-snapshot.score)+'점';
     $('score-progress').setAttribute('aria-valuetext',fmt(snapshot.score)+'점, '+(failed?'미션 미완성, 획득한 별 0개':next?'별 '+next.stars+'개까지 '+fmt(next.remaining)+'점':snapshot.won?'별 3개 획득':'별 3개 점수선 도달, 미션 완료 필요'));
     const active=snapshot.feverTurns>0&&!snapshot.won&&!snapshot.over;
     $('fever-title').textContent=active?'햇살 합창 · 피버!':'햇살 합창 · 피버';
@@ -331,13 +342,13 @@
   function scheduleHint() {
     clearTimeout(hintTimer);
     if(!game || game.won || game.over || busy || screen!=='play' || modalType || blastMode || document.hidden)return;
-    hintTimer=setTimeout(()=>showHint(false),profile.hasSeenTutorial?9000:2000);
+    hintTimer=setTimeout(()=>showHint(false),coaching()?300:profile.hasSeenTutorial?9000:2000);
   }
   function showHint(manual=true) {
     if(busy || modalType || game.won || game.over)return;
     clearHints();blastMode=false;view.select(null);controls();setHint();
-    const pair=isV2Game()?game.hint():LumiHints.hint(game);if(!pair)return;
-    view.showHint(pair);
+    const guide=coaching(),pair=guide||(isV2Game()?game.hint():LumiHints.hint(game));if(!pair)return;
+    view.showHint(pair);if(guide)setHint(guide.text);
     if(manual){audio.play('hint');toast('반짝이는 두 친구를 바꿔보세요');}
     else if(!profile.hasSeenTutorial)toast('친구를 톡톡 누르거나, 옆으로 밀어봐요!',3000);
     hintTimer=setTimeout(()=>{view.clearHints();scheduleHint();},4500);
@@ -378,6 +389,13 @@
     }
   }
   function commitTurn(before,action,valid,deferUi=false) {
+    if(mode==='daily'){
+      const done=LumiFun.checkpoint(profile.daily,game,maxCombo);
+      if(!done.ok){resultDetails.dailyError=true;toast('도전 기록을 저장할 수 없어요. 홈으로 돌아가 다시 이어주세요.',3500);return;}
+      profile.daily=done.state;const saved=persist();
+      if(done.finished)resultDetails={daily:done.result,persisted:saved};
+      if(!deferUi)refreshTurnUI();return;
+    }
     const seedsBefore=LumiGarden.earnedParts(profile);
     const memoriesBefore=Array.from({length:6},(_,type)=>LumiProgress.memoryLevel(profile,type));
     const placesBefore=game.won?LumiJourney.restorationSummary(profile).flatMap(c=>c.projects.filter(p=>p.state==='restored').map(p=>p.id)):[];
@@ -422,15 +440,16 @@
     if(!deferUi)refreshTurnUI();
   }
   function refreshTurnUI(){
+    if(mode==='daily'){updateRankStatus();return;}
     sidebars();updateRankStatus();updateJourneyHUD();
     const placeState=LumiJourney.getRestoration(profile,Math.ceil(level/10));view.setChapter?.(placeState.chapter,placeState.restored,Boolean(profile.stars[placeState.chapter*10-1]));
   }
   async function playResult(result,before,action=null) {
-    if(!result.events.length){if(result.reason==='frozen'){view.select(null);audio.play('invalid');toast('서리 위 친구는 교환할 수 없어요. 다른 칸에서 매치를 만들거나 특수 팡빛으로 녹여요.',3200);}scheduleHint();return;}
+    if(!result.events.length){if(['frozen','crate'].includes(result.reason)){view.select(null);audio.play('invalid');toast(result.reason==='crate'?'상자 칸은 교환할 수 없어요. 바로 옆에서 매치해 잠금을 열어요.':'서리 칸은 교환할 수 없어요. 직접 매치하거나 특수 팡빛으로 녹여요.',3200);}scheduleHint();return;}
     const turnEpoch=epoch,focus=view.focusedPosition();
     busy=true;clearHints();dismissSpecialCoach();newSpecial=null;view.select(null);blastMode=false;controls();
     if(result.valid){
-      LumiJourney.recordResult(journeyRun,result);
+      if(mode==='campaign')LumiJourney.recordResult(journeyRun,result);
       maxCombo=Math.max(maxCombo,...result.events.filter(e=>e.kind==='clear').map(e=>e.combo||0));
       // Commit the stable, authoritative board and rewards before the first animation await.
       commitTurn(before,action,true,true);
@@ -446,7 +465,7 @@
           if(event.combo>=4)buddy('excited',event.combo+'연쇄! 우리 정말 잘 맞는다!','combo');
           else if(event.activated.length)buddy('excited','반짝! 우리 마법이 터졌어!','special');
           else buddy('happy',event.combo>1?event.combo+'연쇄! 행복이 이어져!':'좋아! 마음이 한 뼘 가까워졌어.','match');
-          if(!newSpecial){const made=event.created.find(p=>!profile.seenSpecials[p.tile.special]);if(made)newSpecial={kind:made.tile.special,id:made.tile.id};}
+          if(mode==='campaign'&&!newSpecial){const made=event.created.find(p=>!profile.seenSpecials[p.tile.special]);if(made)newSpecial={kind:made.tile.special,id:made.tile.id};}
           await view.clear(event);
         }
         else if(event.kind==='fall'){await view.render(event,'fall');}
@@ -471,10 +490,11 @@
     $('announcer').textContent=fmt(snapshot.score)+'점, '+snapshot.moves+'회 남음. '+(turnCombo>1?turnCombo+'연쇄. ':'')+snapshot.objectives.map(g=>LumiArt.names[g.type]+' '+Math.max(0,g.target-g.current)+'개 남음').join(', ')+Object.entries(snapshot.terrainRemaining||{}).filter(([k])=>snapshot.terrainGoal[k]).map(([k,n])=>', '+terrainName(k)+' '+n+'개 남음').join('');
     if(snapshot.won || snapshot.over){
       pendingModal=null;
-      setHint(snapshot.won?'우리의 작은 정원이 활짝 피었어요!':'괜찮아요. 새로운 만남이 기다리고 있어요');
+      setHint(mode==='daily'?'15번의 도전을 마쳤어요!':snapshot.won?'우리의 작은 정원이 활짝 피었어요!':'괜찮아요. 새로운 만남이 기다리고 있어요');
       await wait(520);
       if(turnEpoch!==epoch)return;
       busy=false;controls();
+      if(mode==='daily'){audio.play('win');LumiMobile.feedback('win');fx.confetti();showModal('daily-result');return;}
       if(snapshot.won){audio.play('win');LumiMobile.feedback('win');fx.confetti();if(resultDetails.restored?.length)fx.worldRestore?.(Math.ceil(level/10));buddy('excited','너랑 함께여서 오늘도 행복했어!','clear');}
       else{audio.play('lose');buddy('sleep','조금 쉬었다, 다시 같이 해보자.','lose');}
       showModal(snapshot.won?'win':'lose');
@@ -491,7 +511,7 @@
   function choose(position) {
     if(sessionInterrupted || busy || modalType || game.won || game.over || !sessionGuard.canWrite())return;
     clearHints();dismissSpecialCoach();
-    if(!blastMode&&game.terrain?.[position.r]?.[position.c]?.kind==='frost'){view.select(null);toast('이 칸의 서리를 직접 매치하거나 특수 팡빛으로 녹여요.');scheduleHint();return;}
+    if(!blastMode&&['frost','crate'].includes(game.terrain?.[position.r]?.[position.c]?.kind)){view.select(null);toast(game.terrain[position.r][position.c].kind==='crate'?'상자 옆에서 매치해 잠금을 풀어요.':'이 칸의 서리를 직접 매치하거나 특수 팡빛으로 녹여요.');scheduleHint();return;}
     if(blastMode){
       if(blasts<1)return;
       const before=game.collected.slice();blasts--;audio.play('special');playResult(game.blast(position),before,{kind:'blast',position:{...position}});
@@ -504,18 +524,20 @@
     const before=game.collected.slice();LumiMobile.feedback();playResult(game.play(from,to),before,{kind:'swap',from:{...from},to:{...to}});
   }
 
-  async function startGarden(id,restore=null,{ranked=false,silent=false}={}) {
+  async function startGarden(id,restore=null,{ranked=false,silent=false,daily=null}={}) {
     if(sessionInterrupted || !sessionGuard.canWrite())return;
     epoch++;busy=true;modalType=null;pendingModal=null;blastMode=false;goalsSignature='';rankSubmission=null;rankStartIssue=null;rankRun=null;
+    mode=daily?'daily':'campaign';dailyDay=daily?.state.active.day||null;document.body.dataset.v2Mode=mode;
     const loadingEpoch=epoch;$('board-wrap').classList.add('board-loading');
     clearHints();dismissSpecialCoach();clearTimeout(toastTimer);clearTimeout(comboTimer);comboAnimation?.cancel();
     $('combo-display').style.removeProperty('opacity');$('combo-display').style.removeProperty('transform');fx.clear();view.reset();
     newSpecial=null;lastLowWarning=-1;reactionUntil=0;reactionPriority=0;resultDetails={};journeySignature='';
     $('board-toast').classList.remove('visible');
     level=Math.max(1,Math.min(profile.unlocked,id));
-    let definition=restore?(restore.game.version===LumiEngineV2.STATE_VERSION?LumiLevelsV2[level-1]:LumiLevels[level-1]):ranked?LumiLevels[level-1]:LumiLevelsV2[level-1];
+    let definition=daily?LumiFun.definition(dailyDay):restore?(restore.game.version===LumiEngineV2.STATE_VERSION?(restore.game.rulesRevision===LumiEngineV2.FUN_REVISION?LumiLevelsFun[level-1]:LumiLevelsV2[level-1]):LumiLevels[level-1]):ranked?LumiLevels[level-1]:LumiLevelsFun[level-1];
     $('stage-title').textContent=definition.title;controls();
-    if(restore){
+    if(daily){game=daily.game;shuffles=0;blasts=0;maxCombo=daily.state.active.maxCombo;}
+    else if(restore){
       const restoreApi=restore.game.version===LumiEngineV2.STATE_VERSION?LumiEngineV2:LumiEngine;
       game=restoreApi.Game.fromState(restore.game);shuffles=restore.shuffles;blasts=restore.blasts;maxCombo=restore.maxCombo;
       rankRun=restoreApi===LumiEngine?ranking.restoreRun(game.exportState()):null;
@@ -534,33 +556,35 @@
       if(loadingEpoch!==epoch)return;
       rankRun=startedRun;
       if(startedRun)syncRewards(startedRun);
-      definition=rankRun?LumiLevels[level-1]:LumiLevelsV2[level-1];
+      definition=rankRun?LumiLevels[level-1]:LumiLevelsFun[level-1];
+      const firstTutorial=!rankRun&&level===1&&!profile.hasSeenTutorial&&!profile.stars[0];
       const GameClass=rankRun?LumiEngine.Game:LumiEngineV2.Game;
-      game=new GameClass({...definition,buddy:{type:profile.selectedBuddy,tier:LumiRewards.bond(companionXp(profile.selectedBuddy,false)).level},...(rankRun?.options||{}),rows:6,cols:6,types:6,requireScore:false,seed:rankRun?.seed??((Date.now()^Math.floor(Math.random()*0xffffffff))>>>0)});
+      game=new GameClass({...definition,buddy:{type:profile.selectedBuddy,tier:LumiRewards.bond(companionXp(profile.selectedBuddy,false)).level},...(rankRun?.options||{}),rows:6,cols:6,types:6,requireScore:false,seed:rankRun?.seed??(firstTutorial?LumiFun.INTRO_SEED:((Date.now()^Math.floor(Math.random()*0xffffffff))>>>0))});
+      if(firstTutorial)LumiFun.decorateIntro(game);
       if(rankRun && !ranking.bindState(game.exportState())){ranking.abandonRun();rankRun=null;}
       shuffles=2;blasts=2;maxCombo=0;
     }
-    journeyRun=LumiJourney.createRun(level,restore?.journey);
-    const placeState=LumiJourney.getRestoration(profile,Math.ceil(level/10));view.setChapter?.(placeState.chapter,placeState.restored,Boolean(profile.stars[placeState.chapter*10-1]));
+    journeyRun=daily?null:LumiJourney.createRun(level,restore?.journey);
+    const placeState=LumiJourney.getRestoration(profile,daily?definition.chapter:Math.ceil(level/10));view.setChapter?.(placeState.chapter,placeState.restored,Boolean(profile.stars[placeState.chapter*10-1]));
     $('stage-title').textContent=definition.title;
-    $('stage-title').dataset.stageSummary='STAGE '+String(level).padStart(2,'0')+' · '+definition.difficultyLabel;
-    $('stage-title').setAttribute('aria-label',level+'단계, '+definition.title+', '+definition.difficultyLabel);
+    $('stage-title').dataset.stageSummary=(daily?'DAILY '+dailyDay.slice(5):'STAGE '+String(level).padStart(2,'0'))+' · '+definition.difficultyLabel;
+    $('stage-title').setAttribute('aria-label',(daily?'오늘의 도전':level+'단계')+', '+definition.title+', '+definition.difficultyLabel);
     $('board-wrap').classList.remove('board-loading');
-    $('stage-subtitle').textContent=isV2Game()&&definition.terrain?.length?definition.subtitle:LumiStory.stageForLevel(level).action;
+    $('stage-subtitle').textContent=daily||isV2Game()&&(definition.terrain?.length||definition.delivery?.length)?definition.subtitle:LumiStory.stageForLevel(level).action;
     $('difficulty-badge').textContent=definition.difficultyLabel||'산책';
     $('difficulty-badge').dataset.difficulty=definition.difficulty||'normal';
-    rankStage=level;updateRankStatus();
-    $('chapter-number').textContent='STAGE '+String(level).padStart(2,'0');
-    setHint('이번 단계 요령 · '+(definition.recommendedSkill||'목표를 먼저 확인하세요'));sidebars();hud(game.snapshot(),true);updateJourneyHUD();controls();rememberSession();
+    if(!daily)rankStage=level;updateRankStatus();
+    $('chapter-number').textContent=daily?'DAILY '+dailyDay.slice(5):'STAGE '+String(level).padStart(2,'0');
+    setHint(coaching()?.text||(daily?definition.recommendedSkill:'이번 단계 요령 · '+(definition.recommendedSkill||'목표를 먼저 확인하세요')));sidebars();hud(game.snapshot(),true);if(!daily)updateJourneyHUD();controls();rememberSession();
     const gardenEpoch=epoch;
     await view.render(game.snapshot(),'entry');
     if(gardenEpoch!==epoch)return;
     busy=false;controls();scheduleHint();
-    if(silent)return;
+    if(silent||daily)return;
     if(rankStartIssue)toast(rankStartIssue.message,4500);
     else if(initial.migrationNotice){toast(initial.migrationNotice,3800);initial.migrationNotice=null;}
     else if(restore)toast(game.scoringVersion===LumiRewards.SCORING_VERSION?'친구들이 기다렸어요. 이어서 놀아볼까요?':'기존 판을 이어가요. 새 보너스와 랭킹은 다음 판부터!',4000);
-    else if(definition.terrain?.length)toast(definition.recommendedSkill,3600);
+    else if(definition.terrain?.length||definition.delivery?.length)toast(definition.recommendedSkill,3600);
     else if(game.budsGoal)toast(definition.buds.some(b=>b.hp>1)?'두 겹 봉오리는 같은 자리에서 두 번, 톡톡!':'봉오리 위에서 빛모습을 모으면 꽃이 피어요',3000);
     if(pendingModal){const next=pendingModal;pendingModal=null;showModal(next.type,next.data);}
     else if(!restore)buddy('wink',game.perks.startScore?'오늘의 응원 선물 +'+fmt(game.perks.startScore)+'점!':LumiArt.characters[profile.selectedBuddy].tagline,'selected');
