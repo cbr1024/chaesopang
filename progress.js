@@ -1,10 +1,10 @@
 /* Lumi Garden — local progress, one atomic save, no network or telemetry. */
 (function (root, factory) {
   const node = typeof module === 'object' && module.exports;
-  const api = factory(root, node ? require('./engine.js') : root.LumiEngine, node ? require('./levels.js') : root.LumiLevels, node ? require('./rewards.js') : root.LumiRewards, node ? require('./journey.js') : root.LumiJourney, node ? require('./garden-economy.js') : root.LumiGarden, node ? require('./engine-v2.js') : root.LumiEngineV2, node ? require('./levels-v2.js') : root.LumiLevelsV2);
+  const api = factory(root, node ? require('./engine.js') : root.LumiEngine, node ? require('./levels.js') : root.LumiLevels, node ? require('./rewards.js') : root.LumiRewards, node ? require('./journey.js') : root.LumiJourney, node ? require('./garden-economy.js') : root.LumiGarden, node ? require('./engine-v2.js') : root.LumiEngineV2, node ? require('./levels-v2.js') : root.LumiLevelsV2, node ? require('./wardrobe.js') : root.LumiWardrobe);
   if (node) module.exports = api;
   if (root) root.LumiProgress = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (root, engine, initialLevels, rewards, journey, garden, engineV2, levelsV2) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (root, engine, initialLevels, rewards, journey, garden, engineV2, levelsV2, wardrobe) {
   'use strict';
 
   const KEY = 'lumi-garden-v3';
@@ -37,7 +37,7 @@
         buddyMemoryLevels: Array(6).fill(1),
         seenSpecials: { row: false, col: false, bomb: false, rainbow: false },
         storySeen: { prologue: false, openings: Array(5).fill(false), endings: Array(5).fill(false) },
-        journey: journey.normalizeProfile(), garden: {version:garden.VERSION,owned:[],equipped:{}}, 
+        journey: journey.normalizeProfile(), garden: {version:garden.VERSION,owned:[],equipped:{}}, wardrobe: {version:wardrobe.VERSION,equipped:Array(6).fill(null),greetings:Array(6).fill(null)}, 
         attempts: Array(count).fill(0), hasSeenTutorial: false, bestScore: 0
       },
       settings: { music: true, sfx: true, haptics: true, volume: 0.45 },
@@ -100,6 +100,7 @@
       return validInt(saved, 1, 5) ? saved : 1;
     });
     rememberMemories(profile);
+    profile.wardrobe=wardrobe.normalize(source.wardrobe,profile);
     const seen = record(source.seenSpecials) ? source.seenSpecials : {};
     profile.seenSpecials = Object.fromEntries(['row','col','bomb','rainbow'].map(kind => [kind, seen[kind] === true]));
     // V5 story flags are optional presentation data. Existing V2/V3 saves,
