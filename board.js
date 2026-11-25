@@ -76,6 +76,7 @@
       this.board=board; this.tiles=tiles; this.budLayer=budLayer; this.cells=cells; this.wrap=wrap || board;
       this.fx=fx; this.onChoose=onChoose; this.onSwap=onSwap; this.onInteract=onInteract; this.onEscape=onEscape; this.onCue=onCue;
       this.nodes=new Map(); this.tileNodes=this.nodes; this.budNodes=new Map(); this.rowNodes=[];
+      this.terrainLayer=board.querySelector('.terrain-layer');this.terrainNodes=new Map();
       this.rows=6; this.cols=6; this.cellSize=52; this.step=56;
       this.chapter=1; this.restoredCount=0; this.chapterCleared=false; this._landmarkSignature="";
       this.selected=null; this.pointer=null; this.snapshot=null; this.disabled=false; this.blastMode=false;
@@ -313,6 +314,26 @@
       for(const [key,node] of this.budNodes) if(!keep.has(key)) { this.budNodes.delete(key); if(!this._retiring.has(node)) this._forget(node); }
     }
 
+    _renderTerrain(snapshot) {
+      if(!this.terrainLayer)return;
+      const keep=new Set();
+      for(let r=0;r<this.rows;r++)for(let c=0;c<this.cols;c++){
+        const t=snapshot.terrain?.[r]?.[c];if(!t)continue;
+        const key=r+':'+c;keep.add(key);let node=this.terrainNodes.get(key);
+        if(!node){
+          node=document.createElement('span');node.className='v2-terrain';node.setAttribute('aria-hidden','true');
+          node.style.left='calc(var(--step) * '+c+')';node.style.top='calc(var(--step) * '+r+')';
+          this.terrainLayer.appendChild(node);this.terrainNodes.set(key,node);
+        }
+        if(node.dataset.kind!==t.kind){
+          node.dataset.kind=t.kind;
+          node.innerHTML=t.kind==='weed'?'<svg viewBox="0 0 30 30" aria-hidden="true"><path d="M15 27Q5 18 3 7q12 2 13 14Q14 7 21 2q5 13-2 22Q25 14 28 16q0 8-13 11" fill="#77a45b" stroke="#496c43" stroke-width="1.5" stroke-linejoin="round"/></svg><b></b>':'<svg viewBox="0 0 30 30" aria-hidden="true"><path d="M15 2v26M4 8l22 14M4 22L26 8M10 5l5 4 5-4M10 25l5-4 5 4" fill="none" stroke="#5689b1" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><b></b>';
+        }
+        node.dataset.hp=String(t.hp);node.querySelector('b').textContent=t.hp>1?'2':'';
+      }
+      for(const [key,node] of this.terrainNodes)if(!keep.has(key)){this.terrainNodes.delete(key);node.remove();}
+    }
+
     async render(snapshot,kind='static') {
       if(!snapshot?.board || this._disposed) return;
       const epoch=this._epoch,keep=new Set(),pending=[],newCounts=Array(this.cols).fill(0);
@@ -328,8 +349,9 @@
         else if(Number(node.dataset.type)!==tile.type || node.dataset.special!==(tile.special || '')) this._paint(node,tile);
         node.dataset.r=String(r); node.dataset.c=String(c);
         node.setAttribute('aria-rowindex',String(r+1)); node.setAttribute('aria-colindex',String(c+1));
-        const bud=Number(snapshot.buds?.[r]?.[c]) || 0;
-        node.setAttribute('aria-label',(r+1)+'행 '+(c+1)+'열, '+root.LumiArt.names[tile.type]+(tile.special?', '+(specialNames[tile.special] || tile.special):'')+(bud?', 꽃봉오리 '+bud+'겹, '+(root.LumiArt.chapterBuds?.[this.chapter-1]||'새싹 봉오리'):''));
+        const bud=Number(snapshot.buds?.[r]?.[c]) || 0,terrain=snapshot.terrain?.[r]?.[c];
+        node.dataset.frozen=String(terrain?.kind==='frost');
+        node.setAttribute('aria-label',(r+1)+'행 '+(c+1)+'열, '+root.LumiArt.names[tile.type]+(tile.special?', '+(specialNames[tile.special] || tile.special):'')+(bud?', 꽃봉오리 '+bud+'겹, '+(root.LumiArt.chapterBuds?.[this.chapter-1]||'새싹 봉오리'):'')+(terrain?', '+(terrain.kind==='weed'?'잡초':'서리, 교환 불가')+' '+terrain.hp+'겹':''));
         node.setAttribute('aria-disabled',String(this.disabled));
         node.tabIndex=same(this._focus,{r,c})?0:-1;
         const active=same(this.selected,{r,c});
@@ -375,7 +397,7 @@
       for(const [id,node] of [...this.nodes]) if(!keep.has(id)) {
         this.nodes.delete(id); if(!this._retiring.has(node)) this._forget(node);
       }
-      this._renderBuds(snapshot);
+      this._renderBuds(snapshot);this._renderTerrain(snapshot);
       // ARIA ownership follows logical rows without moving live DOM elements.
       for(let r=0;r<this.rows;r++) this.rowNodes[r].setAttribute('aria-owns',
         snapshot.board[r].filter(Boolean).map(tile=>this.nodes.get(tile.id)?.id).filter(Boolean).join(' '));
@@ -462,6 +484,11 @@
           }));
         }
       }
+      for(const hit of event.terrainHit||[])this._cue(82,()=>{
+        const point=this.center(hit.r,hit.c),color=hit.kind==='weed'?'#78aa61':'#75b8dc';
+        if(hit.after)this.fx?.shockwave?.(point.x,point.y,color,{type:0});else this.fx?.burst?.(point.x,point.y,color,1.1,0);
+        const n=this.terrainNodes.get(hit.r+':'+hit.c);if(n&&!this.reducedMotion)n.animate([{scale:'1',opacity:1},{scale:'1.13',opacity:.65},{scale:'1',opacity:hit.after?1:.15}],{duration:160,easing:'ease-out'});
+      });
       for(const p of event.bloomedCells || (event.budsHit || []).filter(hit=>!hit.after)) this._cue(95,()=> {
         const point=this.center(p.r,p.c),source=scored.find(cell=>cell.r===p.r&&cell.c===p.c);
         this.fx?.bloom?.(point.x,point.y,root.LumiArt.colors[source?.tile.type ?? 0]);
@@ -659,6 +686,7 @@
       for(const node of [...this._tracks.keys()])this._stopTrack(node);
       for(const node of this.nodes.values())node.remove();this.nodes.clear();
       for(const node of this.budNodes.values())node.remove();this.budNodes.clear();
+      for(const node of this.terrainNodes.values())node.remove();this.terrainNodes.clear();
       for(const node of this._retiring)node.remove();this._retiring.clear();
       this._states.clear();this._cues.clear();
       for(const row of this.rowNodes)row.setAttribute('aria-owns','');
