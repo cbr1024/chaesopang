@@ -26,17 +26,28 @@
     const grid=Array.from({length:rows},()=>Array(cols).fill(null));
     if(value===undefined)return grid;
     if(!Array.isArray(value))throw new TypeError('Invalid terrain');
-    const validate=t=>t&&['weed','frost'].includes(t.kind)&&integer(t.hp,1,2);
+    const validate=t=>t&&['weed','frost','crate'].includes(t.kind)&&integer(t.hp,1,2);
     if(value.length&&Array.isArray(value[0])){
       if(value.length!==rows||value.some(row=>!Array.isArray(row)||row.length!==cols||row.some(t=>t!==null&&!validate(t))))throw new TypeError('Invalid terrain grid');
       for(let r=0;r<rows;r++)for(let c=0;c<cols;c++)if(value[r][c])grid[r][c]={kind:value[r][c].kind,hp:value[r][c].hp};
     }else{
       for(const t of value){if(!validate(t)||!integer(t.r,0,rows-1)||!integer(t.c,0,cols-1)||grid[t.r][t.c])throw new TypeError('Invalid terrain cell');grid[t.r][t.c]={kind:t.kind,hp:t.hp};}
     }
-    if(grid.flat().filter(t=>t?.kind==='frost').length>Math.floor(rows*cols/4))throw new RangeError('Too many frozen cells');
+    if(grid.flat().filter(t=>t?.kind==='frost'||t?.kind==='crate').length>Math.floor(rows*cols/4))throw new RangeError('Too many frozen cells');
     return grid;
   }
-  const terrainCounts=grid=>({weed:grid.flat().filter(t=>t?.kind==='weed').length,frost:grid.flat().filter(t=>t?.kind==='frost').length});
+  const REVISION='campaign-v2-a',FUN_REVISION='campaign-v2-b';
+  const terrainCounts=(grid,revision=REVISION)=>Object.fromEntries((revision===FUN_REVISION?['weed','frost','crate']:['weed','frost']).map(kind=>[kind,grid.flat().filter(t=>t?.kind===kind).length]));
+  function normalizeDelivery(value,rows,cols,initial=false){
+    if(value===undefined)return [];
+    if(!Array.isArray(value)||value.length>3)throw new TypeError('Invalid seed delivery');
+    const seen=new Set();
+    return value.map(s=>{
+      if(!s||!integer(s.c,0,cols-1)||!integer(s.r,0,initial?0:rows-1)||seen.has(s.c))throw new TypeError('Invalid seed lane');
+      seen.add(s.c);return {c:s.c,r:s.r};
+    });
+  }
+  const deliveryRemaining=(seeds,rows)=>seeds.filter(s=>s.r<rows-1).length;
   function randomGenerator(seed, restoredState) {
     let value = typeof seed === 'number' ? seed >>> 0 : 2166136261;
     if (typeof seed !== 'number') {
@@ -156,9 +167,14 @@
       this._initialBuds = this.buds.map(row => row.slice());
       this.budsGoal = this.buds.flat().filter(hp => hp > 0).length;
       this.bloomed = 0;
+      this.rulesRevision=options.rulesRevision||REVISION;
+      if(![REVISION,FUN_REVISION].includes(this.rulesRevision))throw new TypeError('Unknown campaign revision');
       this.terrain=normalizeTerrain(options.terrain,this.rows,this.cols);
+      if(this.rulesRevision===REVISION&&(this.terrain.flat().some(t=>t?.kind==='crate')||options.delivery?.length))throw new TypeError('New mechanics require campaign-v2-b');
       this._initialTerrain=copyTerrain(this.terrain);
-      this.terrainGoal=terrainCounts(this._initialTerrain);
+      this.terrainGoal=terrainCounts(this._initialTerrain,this.rulesRevision);
+      this.delivery=normalizeDelivery(options.delivery,this.rows,this.cols,true);
+      this._initialDelivery=this.delivery.map(s=>({...s}));
       this.feverCharge = 0;
       this.feverTurns = 0;
       this.score = this.perks.startScore;
@@ -178,7 +194,7 @@
     _tile(type) { return { id: `lumi-${++this._uid}`, type: type ?? Math.floor(this._random() * this.types), special: null }; }
     _inside(p) { return p && Number.isInteger(p.r) && Number.isInteger(p.c) && p.r >= 0 && p.c >= 0 && p.r < this.rows && p.c < this.cols; }
     _adjacent(a, b) { return this._inside(a) && this._inside(b) && Math.abs(a.r - b.r) + Math.abs(a.c - b.c) === 1; }
-    _frozen(p){return this.terrain[p.r][p.c]?.kind==='frost';}
+    _frozen(p){return ['frost','crate'].includes(this.terrain[p.r][p.c]?.kind);}
     _swap(a, b) { [this.board[a.r][a.c], this.board[b.r][b.c]] = [this.board[b.r][b.c], this.board[a.r][a.c]]; }
     _event(kind, extra = {}) { return { kind, ...this.snapshot(), ...extra }; }
 
@@ -188,7 +204,8 @@
         won: this.won, over: this.over, combo: this.combo, requireScore: this.requireScore,
         collected: this.collected.slice(), objectives: this.objectives.map(objective => ({ ...objective, current: this.collected[objective.type] })),
         buds: this.buds.map(row => row.slice()), budsGoal: this.budsGoal, bloomed: this.bloomed,
-        terrain:copyTerrain(this.terrain),terrainGoal:{...this.terrainGoal},terrainRemaining:terrainCounts(this.terrain),rulesRevision:'campaign-v2-a',
+        terrain:copyTerrain(this.terrain),terrainGoal:{...this.terrainGoal},terrainRemaining:terrainCounts(this.terrain,this.rulesRevision),rulesRevision:this.rulesRevision,
+        ...(this.rulesRevision===FUN_REVISION?{delivery:this.delivery.map(s=>({...s})),deliveryGoal:this._initialDelivery.length,deliveryRemaining:deliveryRemaining(this.delivery,this.rows)}:{}),
         feverCharge: this.feverCharge, feverTurns: this.feverTurns, stars: this.stars,
         scoringVersion: this.scoringVersion, buddy: { ...this.buddy }, perks: { ...this.perks },
         starThresholds: Rewards.starThresholds(this.target), nextStar: Rewards.nextStar(this.score, this.target),
@@ -207,8 +224,9 @@
       const collectionDone = this.objectives.every(objective => this.collected[objective.type] >= objective.target);
       const budsDone = this.bloomed >= this.budsGoal;
       const terrainDone=this.terrain.every(row=>row.every(t=>!t));
-      const scoreRequired = this.requireScore || (!this.objectives.length && !this.budsGoal && !Object.values(this.terrainGoal).some(Boolean));
-      return collectionDone && budsDone && terrainDone && (!scoreRequired || this.score >= this.target);
+      const deliveryDone=deliveryRemaining(this.delivery,this.rows)===0;
+      const scoreRequired = this.requireScore || (!this.objectives.length && !this.budsGoal && !Object.values(this.terrainGoal).some(Boolean)&&!this._initialDelivery.length);
+      return collectionDone && budsDone && terrainDone && deliveryDone && (!scoreRequired || this.score >= this.target);
     }
 
     /** Only stable model states are saved. Playback frames are never resumable. */
@@ -220,7 +238,8 @@
         board: copyBoard(this.board), score: this.score, combo: this.combo,
         collected: this.collected.slice(), initialBuds: this._initialBuds.map(row => row.slice()),
         buds: this.buds.map(row => row.slice()), budsGoal: this.budsGoal, bloomed: this.bloomed,
-        initialTerrain:copyTerrain(this._initialTerrain),terrain:copyTerrain(this.terrain),rulesRevision:'campaign-v2-a',
+        initialTerrain:copyTerrain(this._initialTerrain),terrain:copyTerrain(this.terrain),rulesRevision:this.rulesRevision,
+        ...(this.rulesRevision===FUN_REVISION?{initialDelivery:this._initialDelivery.map(s=>({...s})),delivery:this.delivery.map(s=>({...s}))}:{}),
         feverCharge: this.feverCharge, feverTurns: this.feverTurns,
         won: this.won, over: this.over, stars: this.stars,
         seed: this.seed, rngState: this._random.getState(), uid: this._uid
@@ -237,7 +256,7 @@
 
     static fromState(data) {
       const fail = message => { throw new TypeError(`Invalid Lumi save: ${message}`); };
-      if (!data || typeof data !== 'object' || Array.isArray(data) || data.version!==STATE_VERSION || data.rulesRevision!=='campaign-v2-a') fail('unsupported version');
+      if (!data || typeof data !== 'object' || Array.isArray(data) || data.version!==STATE_VERSION || ![REVISION,FUN_REVISION].includes(data.rulesRevision)) fail('unsupported version');
       const legacy = data.version === LEGACY_STATE_VERSION;
       if (!integer(data.rows, 3, 12) || !integer(data.cols, 3, 12) || !integer(data.types, 3, 12)) fail('dimensions');
       if (!integer(data.initialMoves, 0, 10000) || !integer(data.moves, 0, data.initialMoves) || !integer(data.target, 1, 1000000000000)) fail('moves/target');
@@ -251,6 +270,7 @@
       game.rows = data.rows; game.cols = data.cols; game.types = data.types;
       game.initialMoves = data.initialMoves; game.moves = data.moves; game.target = data.target;
       game._schemaVersion = data.version;
+      game.rulesRevision=data.rulesRevision;
       game.scoringVersion = legacy ? 2 : data.scoringVersion;
       if (!legacy && game.scoringVersion !== Rewards.SCORING_VERSION) fail('scoring version');
       game.buddy = Rewards.normalizeBuddy(legacy ? undefined : data.buddy);
@@ -271,7 +291,7 @@
         if (parts.settled) {
           const expected = Rewards.completionBonus({ score: parts.matchScore + parts.buddyStartBonus + parts.buddyMatchBonus + parts.buddyFeverBonus, target: game.target, moves: game.moves });
           if (parts.moveBonus !== expected.moveBonus || parts.efficiencyBonus !== expected.efficiencyBonus) fail('completion bonus');
-          const scoreRequired = data.requireScore || (!data.objectives?.length && !data.budsGoal && !data.initialTerrain?.flat().some(Boolean));
+          const scoreRequired = data.requireScore || (!data.objectives?.length && !data.budsGoal && !data.initialTerrain?.flat().some(Boolean)&&!data.initialDelivery?.length);
           if (scoreRequired && expected.scoreBefore < game.target) fail('bonus cannot complete a score objective');
         }
       }
@@ -294,12 +314,17 @@
       if(!Array.isArray(data.initialTerrain)||!Array.isArray(data.terrain)||data.initialTerrain.length!==data.rows||data.terrain.length!==data.rows||!Array.isArray(data.initialTerrain[0])||!Array.isArray(data.terrain[0]))fail('terrain grids');
       game._initialTerrain=normalizeTerrain(data.initialTerrain,data.rows,data.cols);
       game.terrain=normalizeTerrain(data.terrain,data.rows,data.cols);
-      game.terrainGoal=terrainCounts(game._initialTerrain);
+      if(data.rulesRevision===REVISION&&(game._initialTerrain.flat().some(t=>t?.kind==='crate')||data.initialDelivery!==undefined||data.delivery!==undefined))fail('new mechanic in legacy save');
+      game.terrainGoal=terrainCounts(game._initialTerrain,game.rulesRevision);
+      if(data.rulesRevision===FUN_REVISION&&(!Array.isArray(data.initialDelivery)||!Array.isArray(data.delivery)))fail('missing seed lanes');
+      game._initialDelivery=normalizeDelivery(data.initialDelivery,game.rows,game.cols,true);
+      game.delivery=normalizeDelivery(data.delivery,game.rows,game.cols);
+      if(game.delivery.length!==game._initialDelivery.length||game.delivery.some((s,i)=>s.c!==game._initialDelivery[i].c)||game.delivery.reduce((n,s)=>n+s.r,0)>collectedTotal)fail('inconsistent seed lanes');
       let weedHits=0,frostHits=0;
       for(let r=0;r<game.rows;r++)for(let c=0;c<game.cols;c++){
         const initial=game._initialTerrain[r][c],current=game.terrain[r][c];
         if(current&&(!initial||initial.kind!==current.kind||current.hp>initial.hp))fail('terrain increased or changed');
-        if(initial){const delta=initial.hp-(current?.hp||0);if(initial.kind==='weed')weedHits+=delta;else frostHits+=delta;}
+        if(initial){const delta=initial.hp-(current?.hp||0);if(initial.kind==='weed'||initial.kind==='crate')weedHits+=delta;else frostHits+=delta;}
       }
       if(frostHits>collectedTotal||weedHits>collectedTotal*5)fail('terrain hits exceed matches');
       const ids = new Set();
@@ -406,7 +431,9 @@
         const combined=this._specialCombo(move.from,move.to,this.board[move.from.r][move.from.c],this.board[move.to.r][move.to.c]);
         if(combined)terrainPoints.push(...combined.cells);
         else if(first.special||second.special){const p=first.special?move.to:move.from,t=first.special?first:second;terrainPoints.push(p);if(t.special==='row')for(let c=0;c<this.cols;c++)terrainPoints.push({r:p.r,c});else if(t.special==='col')for(let r=0;r<this.rows;r++)terrainPoints.push({r,c:p.c});else if(t.special==='bomb')for(let r=p.r-1;r<=p.r+1;r++)for(let c=p.c-1;c<=p.c+1;c++)terrainPoints.push({r,c});else if(t.special==='rainbow'){const other=first.special?second:first;for(let r=0;r<this.rows;r++)for(let c=0;c<this.cols;c++)if(this.board[r][c]?.type===other.type)terrainPoints.push({r,c});}}
-        for(const p of this._terrainHitsFor(terrainPoints).values())value+=this.terrain[p.r][p.c].kind==='frost'?22:16;
+        for(const p of this._terrainHitsFor(terrainPoints).values())value+=this.terrain[p.r][p.c].kind==='frost'?22:this.terrain[p.r][p.c].kind==='crate'?24:16;
+        const unique=new Set(terrainPoints.filter(p=>this._inside(p)).map(key));
+        for(const s of this.delivery.filter(s=>s.r<this.rows-1))for(let r=s.r+1;r<this.rows;r++)if(unique.has(key({r,c:s.c})))value+=25;
         if (first.special === 'rainbow' || second.special === 'rainbow') value += 80;
         else if (first.special || second.special) value += 40;
         this._swap(move.from, move.to);
@@ -417,7 +444,7 @@
 
     play(from, to) {
       if (this.won || this.over || !this._adjacent(from, to)) return { valid: false, events: [], reason: this.won || this.over ? 'finished' : 'not-adjacent' };
-      if(this._frozen(from)||this._frozen(to))return {valid:false,events:[],reason:'frozen'};
+      if(this._frozen(from)||this._frozen(to))return {valid:false,events:[],reason:[from,to].some(p=>this.terrain[p.r][p.c]?.kind==='crate')?'crate':'frozen'};
       const a = { r: from.r, c: from.c };
       const b = { r: to.r, c: to.c };
       const feverWasActive = this.feverTurns > 0;
@@ -490,7 +517,7 @@
         if(!this._inside(p))continue;
         if(this.terrain[p.r][p.c])hits.set(key(p),p);
         for(const q of [{r:p.r-1,c:p.c},{r:p.r+1,c:p.c},{r:p.r,c:p.c-1},{r:p.r,c:p.c+1}]){
-          if(this._inside(q)&&this.terrain[q.r][q.c]?.kind==='weed')hits.set(key(q),q);
+          if(this._inside(q)&&['weed','crate'].includes(this.terrain[q.r][q.c]?.kind))hits.set(key(q),q);
         }
       }
       return hits;
@@ -574,6 +601,8 @@
         terrainHit.push({r:p.r,c:p.c,kind:t.kind,before:t.hp,after});
         this.terrain[p.r][p.c]=after?{kind:t.kind,hp:after}:null;
       }
+      const deliveryHit=[];
+      for(const seed of this.delivery){if(seed.r>=this.rows-1)continue;const before=seed.r,removedBelow=cells.filter(p=>p.c===seed.c&&p.r>before).length;seed.r=Math.min(this.rows-1,before+removedBelow);if(seed.r>before)deliveryHit.push({c:seed.c,before,after:seed.r,delivered:seed.r===this.rows-1});}
       for (const p of cells) this.board[p.r][p.c] = null;
       for (const p of created) this.board[p.r][p.c] = cloneTile(p.tile);
       this.combo++;
@@ -596,7 +625,7 @@
       }
       events.push(this._event('clear', {
         cells, created: created.map(p => ({ r: p.r, c: p.c, tile: cloneTile(p.tile) })),
-        activated, scoreDelta, baseScoreDelta, buddyScoreDelta, buddyFeverDelta, combo: this.combo, budsHit, bloomedCells, terrainHit, feverMultiplier
+        activated, scoreDelta, baseScoreDelta, buddyScoreDelta, buddyFeverDelta, combo: this.combo, budsHit, bloomedCells, terrainHit, ...(this.rulesRevision===FUN_REVISION?{deliveryHit}:{}), feverMultiplier
       }));
       if (startedFever) events.push(this._event('feverStart'));
     }
@@ -685,5 +714,5 @@
     }
   }
 
-  return { Game, findMatches, normalizeTerrain, REVISION:'campaign-v2-a', STATE_VERSION };
+  return { Game, findMatches, normalizeTerrain, normalizeDelivery, REVISION, FUN_REVISION, STATE_VERSION };
 });
