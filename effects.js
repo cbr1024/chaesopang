@@ -143,14 +143,14 @@
       this._start();
     }
 
-    burst(clientX, clientY, color = colors()[0], power = 1, type) {
+    burst(clientX, clientY, color = colors()[0], power = 1, type, budget) {
       if (!this.ctx || this.destroyed) return;
       const p = this._point(clientX, clientY);
       color = ink(color);
       const light = tint(color, 76), deep = tint(color, 45);
       const signature = SIGNATURES[type] || 'leaf', recipe = RECIPES[type] || RECIPES[0];
       power = clamp(Number(power) || 1, 0.4, 3);
-      const count = this.reducedMotion ? 5 : Math.round(16 + power * 7);
+      const count = Math.min(this.reducedMotion ? 5 : Math.round(16 + power * 7),Number.isFinite(budget)?Math.max(1,budget):40);
       this._add({ kind: 'flash', ...p, color, life: 0.24, maxLife: 0.24, size: 22 * power });
       this._add({ kind: 'ring', ...p, color, life: 0.36, maxLife: 0.36,
         size: this.reducedMotion ? 10 : 18 * Math.sqrt(power), ringX:recipe.ringX,ringY:recipe.ringY });
@@ -200,10 +200,10 @@
       const p = this._point(clientX, clientY);
       color = ink(color);
       this._add({ kind: 'ring', ...p, color, life: 0.6, maxLife: 0.6,
-        size: this.reducedMotion ? 25 : 105 });
+        size: this.reducedMotion ? 25 : 105*clamp(Number(options?.scale)||1,.4,1.8) });
       if (!this.reducedMotion) this._add({ kind: 'ring', ...p, color: tint(color, 76),
-        life: 0.44, maxLife: 0.44, size: 72 });
-      this.burst(clientX, clientY, color, 1.8, options?.type);
+        life: 0.44, maxLife: 0.44, size: 72*clamp(Number(options?.scale)||1,.4,1.8) });
+      this.burst(clientX, clientY, color, 1.8, options?.type, options?.scale?12:undefined);
       // A spectrum belongs to an explicitly activated rainbow special. A
       // regular carrot, apple, banana, line, or bomb never borrows its colors.
       if (options?.rainbow) {
@@ -1055,6 +1055,12 @@
           }
           case 'collect': note(88, 0, 0.22, 0.05, 'bell'); note(91, 0.05, 0.24, 0.035, 'bell'); break;
           case 'special': [72,76,79,84,88].forEach((n,i) => note(n,i*0.04,0.4,0.085)); break;
+          case 'combo-line-line': [72,84,79,91].forEach((n,i)=>note(n,i*.045,.30,.08,'bell')); break;
+          case 'combo-line-bomb': note(48,0,.32,.10,'wood');[72,76,84,88].forEach((n,i)=>note(n,i*.048,.42,.078,'marimba')); break;
+          case 'combo-bomb-bomb': note(43,0,.38,.12,'wood');note(55,.045,.32,.08,'felt');[72,79,84].forEach((n,i)=>note(n,.07+i*.06,.42,.075,'bell'));break;
+          case 'combo-rainbow-special': [72,74,76,79,81,84].forEach((n,i)=>note(n,i*.045,.45,.068,'glass'));break;
+          case 'combo-rainbow-rainbow': this._duck(.65,.5);note(48,0,.55,.085,'pad');[72,76,79,84,88,91,96].forEach((n,i)=>note(n,i*.048,.48,.065,i%2?'glass':'bell'));break;
+          case 'seedReward': [79,84,88].forEach((n,i)=>note(n,i*.07,.31,.05,'bell'));break;
           case 'bloom': [77,81,84,89,93].forEach((n,i) => note(n,i*0.055,0.5,0.08,'bell')); break;
           case 'hint': note(79,0,0.28,0.07,'bell'); note(84,0.1,0.35,0.06,'bell'); break;
           case 'shuffle': [84,79,76,72,76,79].forEach((n,i) => note(n,i*0.05,0.22,0.065,'keys')); break;
