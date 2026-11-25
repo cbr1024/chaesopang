@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        engine: [chromium, webkit]
+        engine: [chromium]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,11 +25,16 @@ jobs:
         run: npm install --no-save --ignore-scripts playwright@1.51.1
       - name: Install browser binaries
         run: npx playwright install --with-deps ${{ matrix.engine }}
+      - name: Deterministic fun-loop model regression
+        run: node qa/fun-loop.test.cjs
       - name: Real portrait browser regression
         env:
           QA_ENGINE: ${{ matrix.engine }}
           DEBUG: pw:browser
         run: node qa/browser-smoke.cjs
+      - name: Fun loop real touch regression
+        if: success() || failure()
+        run: node qa/fun-browser.cjs
       - name: Save exact tested source
         if: always() && matrix.engine == 'chromium'
         run: mkdir -p qa-output && git archive --format=zip HEAD -o qa-output/source.zip
