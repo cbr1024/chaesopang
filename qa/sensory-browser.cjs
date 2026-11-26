@@ -98,7 +98,7 @@ async function combos(){
    await idle(page);const t=await trace(page),stats=summary(t),saved=await read(page);
    assert.equal(saved.session.game.moves,data.session.game.moves-1);
    assert(t.events.some(e=>e.kind==='audio'&&e.value==='combo-'+name));
-   assert(stats.vibrationPattern,'combo vibration API was not called');
+   assert(stats.vibrationPattern,'combo vibration API was not called '+JSON.stringify({stats,device:await page.evaluate(()=>({touch:navigator.maxTouchPoints,coarse:matchMedia('(pointer:coarse)').matches,native:LumiMobile.native,hidden:document.hidden,haptics:JSON.parse(localStorage.getItem('lumi-garden-v3')).settings.haptics})),events:t.events.filter(e=>['feedback','vibrate','comboKind'].includes(e.kind))}));
    assert(stats.audioToHapticMs!==null&&stats.audioToHapticMs<35,'audio and haptic out of sync');
    assert(stats.haloToHapticMs!==null&&stats.haloToHapticMs<35,'visual and haptic out of sync');
    assert(stats.releaseToImpactMs!==null&&stats.releaseToImpactMs<650,'impact too late');
