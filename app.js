@@ -47,7 +47,7 @@
   const art = (type, mood = 'idle') => LumiArt.sprite(type, 'ui-' + (++uid), mood);
   const portrait = (type,mood='happy') => LumiHome.portrait(profile,type,mood);
   let screen='play', gardenChapter=1, mode='campaign', dailyDay=null;
-  let game, level = 1, busy = false, blastMode = false, shuffles = 2, blasts = 2, maxCombo = 0;
+  let game, level = 1, busy = false, turnInFlight=false, blastMode = false, shuffles = 2, blasts = 2, maxCombo = 0;
   let storedSession = initial.session, modalType = null, pendingModal = null, returnFocus = null;
   let epoch = 0, hintTimer, toastTimer, buddyTimer, comboAnimation, comboTimer, scoreAnimation;
   let shownScore = 0, goalsSignature = '', storageNotice = false, lastFever = false, resultDetails = {};
@@ -64,17 +64,24 @@
         const counts=Array(6).fill(0);for(const cell of event.cells)counts[cell.tile.type]++;
         audio.playMatch(counts.indexOf(Math.max(...counts)),event.combo,Math.min(1.5,1+event.cells.length/36));
       }else audio.play('match',event.combo);
-      LumiMobile.feedback(event.specialCombo||event.activated.length?'special':'light');
-      if(event.bloomedCells.length||(event.terrainHit||[]).some(t=>!t.after))audio.play('bloom');
+      const major=Boolean(event.specialCombo),special=Boolean(event.activated.length||event.created.length),cleared=event.bloomedCells.length||(event.terrainHit||[]).some(t=>!t.after),delivered=(event.deliveryHit||[]).some(t=>t.delivered);
+      LumiMobile.feedback(major?'combo':special||delivered?'special':event.combo>1?'cascade':'match');
+      if(!major&&!special){if(cleared)audio.play('bloom');else if(delivered)audio.play('seedReward');}
+      if(major)combo(event.combo,false,event.specialCombo);else if(event.combo>1)combo(event.combo);
+      if(mode==='campaign'){
+        if(event.combo>=4)buddy('excited',event.combo+'연쇄! 우리 정말 잘 맞는다!','combo');
+        else if(special)buddy('excited','반짝! 우리 마법이 터졌어!','special');
+        else buddy('happy',event.combo>1?event.combo+'연쇄! 행복이 이어져!':'좋아! 마음이 한 뼘 가까워졌어.','match');
+      }
       collectionTrails(event);hud(event);
     }},
     onEscape:() => { blastMode=false; view.select(null); controls(); setHint(); scheduleHint(); }
   });
   interruptSession=()=>{
-    epoch++;busy=true;modalType=null;clearHints();dismissSpecialCoach();
+    epoch++;busy=true;turnInFlight=false;modalType=null;clearHints();dismissSpecialCoach();
     clearTimeout(buddyTimer);clearTimeout(comboTimer);cancelAnimationFrame(scoreAnimation);
     comboAnimation?.cancel();companionAnimation?.cancel();view.setDisabled(true);
-    fx.setPaused(true);audio.suspend(true);
+    fx.setPaused(true);audio.suspend(true);LumiMobile.stopFeedback?.();
   };
 
   function unlockAudio() { if(!sessionInterrupted)audio.unlock(); }
@@ -124,7 +131,7 @@
     const ended=game && (game.won || game.over);
     view.setDisabled(sessionInterrupted || busy || screen!=='play' || Boolean(modalType) || ended);
     view.setBlastMode(blastMode);
-    $('v2-home-back').disabled=busy || backupBusy || recoveryBusy;
+    $('v2-home-back').disabled=(busy&&!turnInFlight) || backupBusy || recoveryBusy || sessionInterrupted;
     $('hint-button').disabled=busy || ended;
     $('shuffle-button').disabled=busy || ended || mode==='daily' || shuffles<1;
     $('blast-button').disabled=busy || ended || mode==='daily' || blasts<1;
@@ -161,6 +168,7 @@
   function updateGoal(node,remaining,label) {
     if(!node)return;
     const before=node.dataset.remaining;
+    if(before===String(remaining))return;
     node.dataset.remaining=remaining;
     node.classList.toggle('done',remaining===0);
     node.setAttribute('aria-label',label+(remaining===0?' 완료':', '+remaining+'개 남음'));
@@ -276,7 +284,7 @@
     if(voice && kind!=='selected')line=(kind==='danger'?game.moves+'번 남았어. ':'')+voice;
     const priorities={match:1,greet:2,special:3,combo:4,fever:5,danger:6,lose:8,clear:8,selected:9};
     const priority=priorities[kind]||1,now=performance.now();
-    if(now<reactionUntil && priority<reactionPriority)return;
+    if(now<reactionUntil && (priority<reactionPriority || kind==='match'&&priority===reactionPriority))return;
     reactionPriority=priority;reactionUntil=now+(kind==='match'?850:1700);
     clearTimeout(buddyTimer); $('portrait-spirit').innerHTML=portrait(profile.selectedBuddy,mood);
     const avatar=$('companion-avatar');avatar.innerHTML=portrait(profile.selectedBuddy,mood);
@@ -297,8 +305,8 @@
       if(priority>=3){const rect=avatar.getBoundingClientRect();fx.companion?.(rect.x+rect.width/2,rect.y+rect.height/2,LumiArt.colors[profile.selectedBuddy],kind==='clear'?2:1);}
     }
     buddyTimer=setTimeout(()=>{
-      reactionUntil=0;reactionPriority=0;$('portrait-spirit').innerHTML=art(profile.selectedBuddy);
-      avatar.innerHTML=art(profile.selectedBuddy);$('companion-message').textContent=companionIdleMessage();
+      reactionUntil=0;reactionPriority=0;$('portrait-spirit').innerHTML=portrait(profile.selectedBuddy,'idle');
+      avatar.innerHTML=portrait(profile.selectedBuddy,'idle');$('companion-message').textContent=companionIdleMessage();
       delete $('companion-button').dataset.reaction;
     },kind==='clear'?4200:2700);
   }
@@ -345,7 +353,8 @@
     hintTimer=setTimeout(()=>showHint(false),coaching()?300:profile.hasSeenTutorial?9000:2000);
   }
   function showHint(manual=true) {
-    if(busy || modalType || game.won || game.over)return;
+    if(busy || modalType || !game || game.won || game.over || screen!=='play')return;
+    if(!manual&&(view.pointer||view.selected)){clearTimeout(hintTimer);hintTimer=setTimeout(()=>showHint(false),1800);return;}
     clearHints();blastMode=false;view.select(null);controls();setHint();
     const guide=coaching(),pair=guide||(isV2Game()?game.hint():LumiHints.hint(game));if(!pair)return;
     view.showHint(pair);if(guide)setHint(guide.text);
@@ -445,9 +454,9 @@
     const placeState=LumiJourney.getRestoration(profile,Math.ceil(level/10));view.setChapter?.(placeState.chapter,placeState.restored,Boolean(profile.stars[placeState.chapter*10-1]));
   }
   async function playResult(result,before,action=null) {
-    if(!result.events.length){if(['frozen','crate'].includes(result.reason)){view.select(null);audio.play('invalid');toast(result.reason==='crate'?'상자 칸은 교환할 수 없어요. 바로 옆에서 매치해 잠금을 열어요.':'서리 칸은 교환할 수 없어요. 직접 매치하거나 특수 팡빛으로 녹여요.',3200);}scheduleHint();return;}
+    if(!result.events.length){if(['frozen','crate'].includes(result.reason)){view.select(null);audio.play('invalid');LumiMobile.feedback('invalid');toast(result.reason==='crate'?'상자 칸은 교환할 수 없어요. 바로 옆에서 매치해 잠금을 열어요.':'서리 칸은 교환할 수 없어요. 직접 매치하거나 특수 팡빛으로 녹여요.',3200);}scheduleHint();return;}
     const turnEpoch=epoch,focus=view.focusedPosition();
-    busy=true;clearHints();dismissSpecialCoach();newSpecial=null;view.select(null);blastMode=false;controls();
+    busy=true;turnInFlight=true;clearHints();dismissSpecialCoach();newSpecial=null;view.select(null);blastMode=false;controls();
     if(result.valid){
       if(mode==='campaign')LumiJourney.recordResult(journeyRun,result);
       maxCombo=Math.max(maxCombo,...result.events.filter(e=>e.kind==='clear').map(e=>e.combo||0));
@@ -458,30 +467,28 @@
       for(const event of result.events){
         if(turnEpoch!==epoch)return;
         if(event.kind==='swap'){audio.play('swap');await view.render(event,'swap');}
-        else if(event.kind==='invalid'){audio.play('invalid');await view.render(event,'invalid');toast('세 친구가 모이면 자리를 바꿀 수 있어요',1700);}
+        else if(event.kind==='invalid'){audio.play('invalid');LumiMobile.feedback('invalid');await view.render(event,'invalid');if(turnEpoch!==epoch)return;toast('세 친구가 모이면 자리를 바꿀 수 있어요',1700);}
         else if(event.kind==='clear'){
           maxCombo=Math.max(maxCombo,event.combo);
-          if(event.specialCombo)combo(event.combo,false,event.specialCombo);else if(event.combo>1)combo(event.combo);
-          if(event.combo>=4)buddy('excited',event.combo+'연쇄! 우리 정말 잘 맞는다!','combo');
-          else if(event.activated.length)buddy('excited','반짝! 우리 마법이 터졌어!','special');
-          else buddy('happy',event.combo>1?event.combo+'연쇄! 행복이 이어져!':'좋아! 마음이 한 뼘 가까워졌어.','match');
           if(mode==='campaign'&&!newSpecial){const made=event.created.find(p=>!profile.seenSpecials[p.tile.special]);if(made)newSpecial={kind:made.tile.special,id:made.tile.id};}
           await view.clear(event);
         }
         else if(event.kind==='fall'){await view.render(event,'fall');}
         else if(event.kind==='shuffle'){audio.play('shuffle');toast('산들바람이 새로운 만남을 데려와요');await view.render(event,'shuffle');}
-        else if(event.kind==='feverStart'){audio.play('feverStart');combo(3,true);buddy('excited','피버 타임! 지금은 점수 두 배!','fever');}
+        else if(event.kind==='feverStart'){audio.play('feverStart');LumiMobile.feedback('fever');combo(3,true);if(mode==='campaign')buddy('excited','피버 타임! 지금은 점수 두 배!','fever');}
         else if(event.kind==='feverEnd'){audio.play('feverEnd');}
         else if(event.kind==='completionBonus'){
           const from=$('moves').getBoundingClientRect(),to=$('score').getBoundingClientRect();
           toast('남은 '+event.movesRemaining+'회 → 보너스 +'+fmt(event.scoreDelta)+'점',2300);
           audio.play('collect');fx.bonus?.(from.x+from.width/2,from.y+from.height/2,to.x+to.width/2,to.y+to.height/2,event.scoreDelta);
           buddy('excited','남겨 둔 여유도 반짝이는 선물이야!','clear');
-          hud(event);await wait(850);
+          hud(event);await wait(motion.matches?140:560);
         }
+        if(turnEpoch!==epoch)return;
         hud(event);
       }
     } catch(error) {
+      if(turnEpoch!==epoch)return;
       console.error('Lumi animation recovered:',error);await view.render(game.snapshot());
     }
     if(turnEpoch!==epoch)return;
@@ -491,16 +498,16 @@
     if(snapshot.won || snapshot.over){
       pendingModal=null;
       setHint(mode==='daily'?'15번의 도전을 마쳤어요!':snapshot.won?'우리의 작은 정원이 활짝 피었어요!':'괜찮아요. 새로운 만남이 기다리고 있어요');
-      await wait(520);
+      await wait(motion.matches?100:320);
       if(turnEpoch!==epoch)return;
-      busy=false;controls();
+      busy=false;turnInFlight=false;controls();
       if(mode==='daily'){audio.play('win');LumiMobile.feedback('win');fx.confetti();showModal('daily-result');return;}
       if(snapshot.won){audio.play('win');LumiMobile.feedback('win');fx.confetti();if(resultDetails.restored?.length)fx.worldRestore?.(Math.ceil(level/10));buddy('excited','너랑 함께여서 오늘도 행복했어!','clear');}
       else{audio.play('lose');buddy('sleep','조금 쉬었다, 다시 같이 해보자.','lose');}
       showModal(snapshot.won?'win':'lose');
     } else {
-      busy=false;controls();
-      if(focus)view.focusAt(focus);
+      busy=false;turnInFlight=false;controls();
+      if(focus&&screen==='play')view.focusAt(focus);
       if(pendingModal){const next=pendingModal;pendingModal=null;showModal(next.type,next.data);}
       else{
         setHint();scheduleHint();showSpecialCoach(newSpecial);
@@ -511,22 +518,22 @@
   function choose(position) {
     if(sessionInterrupted || busy || modalType || game.won || game.over || !sessionGuard.canWrite())return;
     clearHints();dismissSpecialCoach();
-    if(!blastMode&&['frost','crate'].includes(game.terrain?.[position.r]?.[position.c]?.kind)){view.select(null);toast(game.terrain[position.r][position.c].kind==='crate'?'상자 옆에서 매치해 잠금을 풀어요.':'이 칸의 서리를 직접 매치하거나 특수 팡빛으로 녹여요.');scheduleHint();return;}
+    if(!blastMode&&['frost','crate'].includes(game.terrain?.[position.r]?.[position.c]?.kind)){view.select(null);audio.play('invalid');LumiMobile.feedback('invalid');toast(game.terrain[position.r][position.c].kind==='crate'?'상자 옆에서 매치해 잠금을 풀어요.':'이 칸의 서리를 직접 매치하거나 특수 팡빛으로 녹여요.');scheduleHint();return;}
     if(blastMode){
       if(blasts<1)return;
-      const before=game.collected.slice();blasts--;audio.play('special');playResult(game.blast(position),before,{kind:'blast',position:{...position}});
+      const before=game.collected.slice();blasts--;playResult(game.blast(position),before,{kind:'blast',position:{...position}});
     } else if(same(view.selected,position)){view.select(null);scheduleHint();}
     else if(view.selected && neighbors(view.selected,position))swap(view.selected,position);
     else{view.select(position);audio.play('select');scheduleHint();}
   }
   function swap(from,to) {
     if(sessionInterrupted || busy || modalType || game.won || game.over || !sessionGuard.canWrite())return;
-    const before=game.collected.slice();LumiMobile.feedback();playResult(game.play(from,to),before,{kind:'swap',from:{...from},to:{...to}});
+    const before=game.collected.slice();playResult(game.play(from,to),before,{kind:'swap',from:{...from},to:{...to}});
   }
 
   async function startGarden(id,restore=null,{ranked=false,silent=false,daily=null}={}) {
     if(sessionInterrupted || !sessionGuard.canWrite())return;
-    epoch++;busy=true;modalType=null;pendingModal=null;blastMode=false;goalsSignature='';rankSubmission=null;rankStartIssue=null;rankRun=null;
+    epoch++;busy=true;turnInFlight=false;modalType=null;pendingModal=null;blastMode=false;goalsSignature='';rankSubmission=null;rankStartIssue=null;rankRun=null;
     mode=daily?'daily':'campaign';dailyDay=daily?.state.active.day||null;document.body.dataset.v2Mode=mode;
     const loadingEpoch=epoch;$('board-wrap').classList.add('board-loading');
     clearHints();dismissSpecialCoach();clearTimeout(toastTimer);clearTimeout(comboTimer);comboAnimation?.cancel();
@@ -612,7 +619,7 @@
   function revealFinishActions() {
     const expectedEpoch=epoch;
     requestAnimationFrame(()=>{
-      if(sessionInterrupted||expectedEpoch!==epoch||modalType||busy||!game||!(game.won||game.over))return;
+      if(sessionInterrupted||expectedEpoch!==epoch||screen!=='play'||modalType||busy||!game||!(game.won||game.over))return;
       $('finish-dock').scrollIntoView({block:'nearest',inline:'nearest',behavior:'auto'});
       $('finish-next').focus({preventScroll:true});
     });
@@ -627,8 +634,8 @@
     const playing=screen==='play';$('v2-home').hidden=playing;$('v2-nav').hidden=playing;$('v2-playfield').hidden=!playing;$('v2-home-back').hidden=!playing;
     $('v2-nav').querySelectorAll('[data-v2-nav]').forEach(b=>{if(b.dataset.v2Nav===screen)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
     clearHints();controls();
-    if(playing){view.measure();if(game)view.render(game.snapshot());scheduleHint();if(focus&&!modalType)view.focusAt({r:0,c:0});}
-    else{renderHome();if(focus)$('v2-heading')?.focus({preventScroll:true});}
+    if(playing){view.measure();if(game){const snap=game.snapshot();view.render(snap);hud(snap,true);}LumiMobile.fit?.();scheduleHint();if(focus&&!modalType)view.focusAt({r:0,c:0});}
+    else{fx.clear();fx.fever(false);audio.setFever(false);lastFever=false;document.body.classList.remove('is-fever');renderHome();if(focus)$('v2-heading')?.focus({preventScroll:true});}
     window.scrollTo({top:0,behavior:'auto'});
   }
   function homeMessage(message){const n=$('v2-home').querySelector('.v2-home-status');if(n)n.textContent=message;}
@@ -696,7 +703,21 @@
     modalButton('도전 기록 보기',()=>showModal('daily-info'));
     if(info.remaining)modalButton('홈으로 돌아가기',goHome);
   }
-  function goHome(){if(sessionInterrupted||busy||backupBusy||recoveryBusy)return;if(modalType)closeModal();persist();setScreen('home');}
+  function goHome(){
+    if(sessionInterrupted||backupBusy||recoveryBusy||busy&&!turnInFlight)return;
+    if(screen==='home'&&!modalType)return;
+    if(turnInFlight){
+      // Model/reward commit is synchronous before the first animation await.
+      // Cancel presentation only; late callbacks are invalidated by both epochs.
+      epoch++;turnInFlight=false;busy=false;pendingModal=null;blastMode=false;
+      clearHints();dismissSpecialCoach();clearTimeout(comboTimer);clearTimeout(buddyTimer);clearTimeout(toastTimer);
+      comboAnimation?.cancel();companionAnimation?.cancel();cancelAnimationFrame(scoreAnimation);
+      $('combo-display').style.removeProperty('opacity');$('combo-display').style.removeProperty('transform');
+      $('board-toast').classList.remove('visible');reactionUntil=0;reactionPriority=0;companionSignature='';view.reset();
+      fx.clear();audio.stopEffects?.();LumiMobile.stopFeedback?.();
+    }
+    if(modalType)closeModal();persist();setScreen('home');
+  }
   function modalHeader(eyebrow,title,mood='idle',type=profile.selectedBuddy) {
     $('modal-eyebrow').textContent=eyebrow;$('modal-title').textContent=title;
     $('modal-art').innerHTML=type===null?'':art(type,mood);
@@ -1391,7 +1412,7 @@
     $('modal-content').innerHTML='<div class="settings-list">'+
       '<label class="setting-row"><span><strong>신나는 정원 음악</strong><small>Sunbeam Parade · 오리지널 16마디 루프</small></span><input class="switch" id="music-setting" type="checkbox" '+(settings.music?'checked':'')+' aria-label="배경 음악"></label>'+
       '<label class="setting-row"><span><strong>반짝반짝 효과음</strong><small>매치, 연쇄, 꽃피는 순간의 작은 소리</small></span><input class="switch" id="sfx-setting" type="checkbox" '+(settings.sfx?'checked':'')+' aria-label="효과음"></label>'+
-      '<label class="setting-row"><span><strong>손끝의 작은 반짝임</strong><small>교환과 매치의 가벼운 진동</small></span><input class="switch" id="haptics-setting" type="checkbox" '+(settings.haptics?'checked':'')+' aria-label="진동 피드백"></label>'+
+      '<label class="setting-row"><span><strong>손끝의 작은 반짝임</strong><small>매치·연쇄·특수 조합에 맞춘 진동</small></span><input class="switch" id="haptics-setting" type="checkbox" '+(settings.haptics?'checked':'')+' aria-label="진동 피드백"></label>'+
       '<label class="volume-row"><input id="volume-setting" type="range" min="0" max="100" step="1" value="'+Math.round(settings.volume*100)+'" aria-label="전체 음량"><output id="volume-value">'+Math.round(settings.volume*100)+'%</output></label></div>'+
       '<div class="settings-stat"><div><small>최고 점수</small><strong>'+fmt(profile.bestScore)+'</strong></div><div><small>최고 연쇄</small><strong>×'+profile.maxCombo+'</strong></div></div>'+
       '<p class="save-note">정원과 친밀도는 이 브라우저에 자동 저장돼요. 다른 기기에서 계속하려면 암호화 백업을 만들어 두세요.<br>기기의 동작 줄이기 설정을 따릅니다.</p>'+
@@ -1464,11 +1485,11 @@
     if(sessionInterrupted){fx.setPaused(true);audio.suspend(true);return;}
     fx.setPaused(document.hidden || Boolean(modalType && modalType!=='win'));
     audio.suspend(document.hidden || modalType==='pause');
-    if(document.hidden)clearHints();else scheduleHint();
+    if(document.hidden){clearHints();LumiMobile.stopFeedback?.();}else scheduleHint();
   });
   window.addEventListener('pagehide',()=>{persist();sessionGuard.release();});
   window.addEventListener('lumi:back',()=>modalType?closeModal():screen==='play'?showModal('pause'):screen==='garden'?goHome():undefined);
-  window.addEventListener('lumi:app-state',e=>{if(sessionInterrupted){fx.setPaused(true);audio.suspend(true);return;}persist();audio.suspend(!e.detail.active||modalType==='pause');fx.setPaused(!e.detail.active||Boolean(modalType&&modalType!=='win'));if(!e.detail.active)clearHints();else{scheduleHint();retryRankings();}});
+  window.addEventListener('lumi:app-state',e=>{if(sessionInterrupted){fx.setPaused(true);audio.suspend(true);return;}persist();audio.suspend(!e.detail.active||modalType==='pause');fx.setPaused(!e.detail.active||Boolean(modalType&&modalType!=='win'));if(!e.detail.active){clearHints();LumiMobile.stopFeedback?.();}else{scheduleHint();retryRankings();}});
   window.addEventListener('online',retryRankings);
   retryRankings();
   await startGarden(initial.session?.level || profile.unlocked,initial.session,{silent:true});
