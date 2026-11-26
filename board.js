@@ -14,7 +14,7 @@
   const channels=['x','y','sx','sy','a','o'];
   const velocityKeys=['vx','vy','vsx','vsy','va','vo'];
   const transform = state => `translate3d(${state.x.toFixed(3)}px,${state.y.toFixed(3)}px,0) rotate(${state.a.toFixed(3)}deg) scale(${state.sx.toFixed(4)},${state.sy.toFixed(4)})`;
-  const TIMING=Object.freeze({swapGate:150,swapTail:330,invalidGate:165,invalidTail:360,popGate:168,popTail:238,landingGate:46,landingTail:236,dragTail:155,selectionTail:340});
+  const TIMING=Object.freeze({swapGate:122,swapTail:285,invalidGate:132,invalidTail:265,popGate:142,popTail:220,landingGate:34,landingTail:198,dragTail:120,selectionTail:245});
   // Exact damped harmonic motion, expressed in pixels and milliseconds.
   function spring(from,to,velocity,t,omega=.027,zeta=.74) {
     const d=from-to;
@@ -35,7 +35,7 @@
     };
   }
   function fallTrajectory(from,to,{delay=0,tilt=0}={}) {
-    const distance=Math.max(1,to.y-from.y),flight=clamp(Math.sqrt(2*distance/.0074),125,360);
+    const distance=Math.max(1,to.y-from.y),flight=clamp(Math.sqrt(2*distance/.0094),108,295);
     const v0=clamp(from.vy || 0,-.7,distance/flight*.45),gravity=2*(distance-v0*flight)/(flight*flight);
     const impact=v0+gravity*flight,stretch=clamp(impact*.055,.035,.125),energy=clamp(impact/1.8,.25,1);
     const duration=delay+flight+TIMING.landingTail;
@@ -57,7 +57,7 @@
   }
   function popTrajectory(from,{delay=0}={}) {
     return elapsed=> {
-      const t=elapsed-delay;
+      const t=(elapsed-delay)*238/TIMING.popTail;
       if(t<=0) return {...from};
       const driftX=(from.vx || 0)*t*Math.exp(-t/32),driftY=(from.vy || 0)*t*Math.exp(-t/28);
       let sx,sy,lift;
@@ -136,7 +136,7 @@
     _nodeAt(p) { const tile=this._inside(p) && this.snapshot?.board[p.r]?.[p.c]; return tile ? this.nodes.get(tile.id) || null : null; }
     _targetPosition(target) {
       const node=target?.closest?.('.tile');
-      if (!node || !this.tiles.contains(node)) return null;
+      if (!node || !this.tiles.contains(node) || node.classList.contains('retiring') || this.nodes.get(node.dataset.id)!==node) return null;
       const p={r:Number(node.dataset.r),c:Number(node.dataset.c)};
       return this._inside(p) ? p : null;
     }
@@ -176,8 +176,9 @@
 
     _write(node,state) {
       this._states.set(node,{...state});
-      node.style.transform=transform(state);
-      node.style.opacity=String(clamp(state.o,0,1));
+      const matrix=transform(state),opacity=String(clamp(state.o,0,1));
+      if(node.style.transform!==matrix)node.style.transform=matrix;
+      if(node.style.opacity!==opacity)node.style.opacity=opacity;
     }
     _stateAt(node,time=clock()) {
       const track=this._tracks.get(node);
@@ -197,7 +198,7 @@
     _motion(node,build) {
       const start=clock(),from=this._stateAt(node,start); this._stopTrack(node);
       const spec=build(from),duration=Math.max(0,spec.duration || 0),final=spec.final || spec.sample(duration);
-      if(this.reducedMotion || duration===0) { this._write(node,final); spec.finish?.(); return Promise.resolve(); }
+      if(this.reducedMotion || duration===0) { this._write(node,final);node.classList.remove('moving'); spec.finish?.(); return Promise.resolve(); }
       this._write(node,from); node.classList.add('moving');
       let resolve,settledResolve;
       const gatePromise=new Promise(done=>resolve=done),settled=new Promise(done=>settledResolve=done);
@@ -418,13 +419,14 @@
       if(this._disposed) return;
       const epoch=this._epoch,pending=[],removed=event.cells || [],created=event.created || [],activated=event.activated || [];
       const scored=[...removed,...created],origin=event.specialComboOrigin||scored[0]||{r:0,c:0}; let x=0,y=0;
-      const burstLimit=this.reducedMotion?4:removed.length>=18?9:removed.length>=9?8:removed.length;
+      const burstLimit=this.reducedMotion?4:removed.length>=18?10:removed.length>=9?8:removed.length;
+      const impactAt=event.specialCombo?72:66;
       const burstIndexes=new Set(Array.from({length:burstLimit},(_,i)=>Math.floor(i*removed.length/Math.max(1,burstLimit))));
       for(const p of scored) { const point=this.center(p.r,p.c); x+=point.x; y+=point.y; }
       for(const [index,p] of removed.entries()) {
         const node=this.nodes.get(p.tile.id);
-        const delay=Math.min(36,Math.hypot(p.r-origin.r,p.c-origin.c)*7);
-        if(burstIndexes.has(index))this._cue(82+delay,()=> {
+        const delay=Math.min(28,Math.hypot(p.r-origin.r,p.c-origin.c)*5);
+        if(burstIndexes.has(index))this._cue(impactAt+delay,()=> {
           const point=this.center(p.r,p.c);
           this.fx?.burst?.(point.x,point.y,root.LumiArt.colors[p.tile.type],Math.min(1.5,.72+(event.combo || 1)*.12),p.tile.type,removed.length>=9?9:undefined);
         });
@@ -463,11 +465,12 @@
           this.fx?.shockwave?.(point.x,point.y,root.LumiArt.colors[p.tile.type],{type:p.tile.type,rainbow:p.tile.special==='rainbow'});
         });
       }
-      this._cue(82,()=> {
+      this._cue(impactAt,()=> {
         this.onCue?.('impact',event);
         const combo=event.specialCombo,combined=event.specialComboOrigin;
         if(combo&&combined){
           const center=this.center(combined.r,combined.c),ink='#efd27c';
+          this.fx?.comboImpact?.(center.x,center.y,combo,this.cellSize);
           if(combo==='line-line'){
             this.fx?.beam?.(center.x,center.y,'row',ink);
             this.fx?.beam?.(center.x,center.y,'col',ink);
@@ -517,9 +520,10 @@
         const point=this.center(p.r,p.c),source=scored.find(cell=>cell.r===p.r&&cell.c===p.c);
         this.fx?.bloom?.(point.x,point.y,root.LumiArt.colors[source?.tile.type ?? 0]);
       });
-      if((activated.length || event.combo>2) && !this.reducedMotion) this._cue(80,()=> {
-        this._motion(this.wrap,from=>({duration:250,gate:0,final:pose(),sample:t=>({
-          ...from,x:1.8*Math.exp(-t/65)*Math.sin(t/14),y:1.1*Math.exp(-t/60)*Math.sin(t/17),sx:1,sy:1,a:0,o:1
+      if((event.specialCombo||activated.length || event.combo>2) && !this.reducedMotion) this._cue(impactAt,()=> {
+        const amplitude=event.specialCombo?3.3:Math.min(2.4,1.1+(event.combo||1)*.25);
+        this._motion(this.wrap,from=>({duration:215,gate:0,final:pose(),sample:t=>({
+          ...from,x:amplitude*Math.exp(-t/56)*Math.sin(t/13),y:amplitude*.47*Math.exp(-t/58)*Math.sin(t/16),sx:1,sy:1,a:0,o:1
         })}));
       });
       await Promise.all(pending);
@@ -580,10 +584,14 @@
     _clearSwapTarget() {
       for(const node of this.nodes.values()) node.classList.remove('swap-target');
     }
+    _directDrag(node,target,vx,vy){
+      this._stopTrack(node);node.classList.remove('moving');
+      this._write(node,{...target,vx:clamp(vx,-1.1,1.1),vy:clamp(vy,-1.1,1.1)});
+    }
     _drag(press,dx,dy) {
       if(this.blastMode) return;
       const distance=Math.max(Math.abs(dx),Math.abs(dy));
-      if(distance<3) return;
+      if(distance<3&&!press.axis) return;
       const axis=Math.abs(dx)>Math.abs(dy)?'x':'y';
       if(!press.axis || distance<this.step*.18) press.axis=axis;
       const now=clock(),dt=Math.max(1,now-press.lastTime);
@@ -608,13 +616,14 @@
       const desired=pose(base.x+(press.axis==='x'?travel:cross),base.y+(press.axis==='y'?travel:cross)-3.5,1.055,1.055,
         press.axis==='x'?clamp(travel/this.step*2.2,-2.2,2.2):0);
       press.node.classList.add('dragging');
-      this._springNode(press.node,desired,{duration:TIMING.dragTail,gate:110,omega:.105,zeta:1});
+      const vx=frozen?0:press.axis==='x'?press.vx:press.vx*.12,vy=frozen?0:press.axis==='y'?press.vy:press.vy*.12;
+      this._directDrag(press.node,desired,vx,vy);
       if(neighbor) {
         neighbor.classList.add('swap-target');
         const p=clamp(Math.abs(travel)/this.step,0,1),home=this._position(target.r,target.c),shift=sign*this.step*p;
         const preview=pose(home.x-(press.axis==='x'?shift:0),home.y-(press.axis==='y'?shift:0)-(press.axis==='x'?Math.sin(Math.PI*p)*2.5:0),
           1-.035*Math.sin(Math.PI*p),1-.035*Math.sin(Math.PI*p),-sign*1.5*Math.sin(Math.PI*p));
-        this._springNode(neighbor,preview,{duration:TIMING.dragTail,gate:110,omega:.095,zeta:1});
+        this._directDrag(neighbor,preview,press.axis==='x'?-vx:0,press.axis==='y'?-vy:0);
       }
     }
     _releasePointer(mode='cancel') {
@@ -625,7 +634,7 @@
       // Hold the exact live pose on commit. render('swap') retargets both
       // pieces, including their current velocity, without a home snap.
       if(mode==='cancel') for(const node of [press.node,press.neighbor].filter(Boolean))
-        this._springNode(node,this._home(node),{duration:320,gate:170,omega:.028,zeta:.74});
+        this._springNode(node,this._home(node),{duration:245,gate:132,omega:.037,zeta:.79});
       try {if(this.board.hasPointerCapture?.(press.id))this.board.releasePointerCapture(press.id);}catch{}
       return press;
     }
@@ -640,22 +649,23 @@
           this.pointer={id:event.pointerId,start:p,x:event.clientX,y:event.clientY,node,axis:null,neighbor:null,
             scale:this.board.clientWidth?rect.width/this.board.clientWidth:1,lastX:0,lastY:0,lastTime:now,vx:0,vy:0};
           const home=this._position(p.r,p.c);
-          if(!this.blastMode)this._springNode(node,pose(home.x,home.y-3.5,1.055,1.055),{duration:230,omega:.037,zeta:.78});
+          if(!this.blastMode)this._springNode(node,pose(home.x,home.y-3.5,1.055,1.055),{duration:145,omega:.05,zeta:.85});
           if(event.pointerType==='mouse')this.focusAt(p);
           try{this.board.setPointerCapture(event.pointerId);}catch{}
         },
         pointermove:event=> {
           const press=this.pointer;if(!press || press.id!==event.pointerId)return;
           if(this.disabled){this._releasePointer('cancel');return;}
-          this._drag(press,(event.clientX-press.x)/press.scale,(event.clientY-press.y)/press.scale);
+          const samples=event.getCoalescedEvents?.()||[];const latest=samples.length?samples[samples.length-1]:event;
+          this._drag(press,(latest.clientX-press.x)/press.scale,(latest.clientY-press.y)/press.scale);
         },
         pointerup:event=> {
           const press=this.pointer;if(!press || press.id!==event.pointerId)return;
           const dx=(event.clientX-press.x)/press.scale,dy=(event.clientY-press.y)/press.scale;
           this._drag(press,dx,dy);
           const distance=Math.max(Math.abs(dx),Math.abs(dy));
-          const flick=Math.max(Math.abs(press.vx),Math.abs(press.vy))>.55 && clock()-press.lastTime<80;
-          const swipe=!this.blastMode && (distance>Math.max(12,this.cellSize*.24) || (distance>9 && flick));
+          const flick=Math.max(Math.abs(press.vx),Math.abs(press.vy))>.45 && clock()-press.lastTime<90;
+          const swipe=!this.blastMode && (distance>Math.max(10,this.cellSize*.21) || (distance>8 && flick));
           const target=swipe?this._swipeTarget(press,dx,dy):null;
           this._releasePointer(swipe && target?'hold':swipe?'cancel':'hold');
           this._suppressClickUntil=Date.now()+350;if(this.disabled)return;
@@ -667,7 +677,7 @@
           Promise.resolve().then(()=>{
             if(version!==this._renderVersion || epoch!==this._epoch || this._disposed)return;
             for(const node of [press.node,press.neighbor].filter(Boolean))if(this.nodes.get(node.dataset.id)===node)
-              this._springNode(node,this._home(node),{duration:310,gate:165,omega:.029,zeta:.76});
+              this._springNode(node,this._home(node),{duration:245,gate:132,omega:.036,zeta:.79});
           });
         },
         pointercancel:event=>{if(this.pointer?.id===event.pointerId)this._releasePointer('cancel');},
