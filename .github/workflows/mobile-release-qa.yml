@@ -35,6 +35,9 @@ jobs:
       - name: Fun loop real touch regression
         if: success() || failure()
         run: node qa/fun-browser.cjs
+      - name: Sensory and normal-motion touch regression
+        if: success() || failure()
+        run: node qa/sensory-browser.cjs
       - name: Save exact tested source
         if: always() && matrix.engine == 'chromium'
         run: mkdir -p qa-output && git archive --format=zip HEAD -o qa-output/source.zip
