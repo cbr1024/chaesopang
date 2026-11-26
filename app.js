@@ -426,7 +426,7 @@
       profile.stars[level-1]=Math.max(previousStars,game.snapshot().stars);
       profile.bestScores[level-1]=Math.max(previous,game.score);
       profile.unlocked=Math.max(profile.unlocked,Math.min(TOTAL,level+1));
-      resultDetails={newBest:game.score>previous,starsAdded:profile.stars[level-1]-previousStars,
+      resultDetails={firstClear:previousStars===0,newBest:game.score>previous,starsAdded:profile.stars[level-1]-previousStars,
         friendship:{buddyType:friendType,beforeXp,afterXp,displayBeforeXp:Math.max(verifiedXp,beforeXp),displayAfterXp:LumiProgress.buddyTotal(profile,friendType,false),memoryBeforeLevel:Math.max(profile.buddyMemoryLevels?.[friendType]||1,LumiRewards.bond(Math.max(verifiedXp,beforeXp)).level),collectedXp:game.collected[friendType],clearXp,gainedXp}};
       resultDetails.journey=LumiJourney.finish(profile,level,journeyRun,true);
       const seedsAfter=LumiGarden.earnedParts(profile);
@@ -647,17 +647,32 @@
     const previous=profile.garden;profile.garden=result.garden;
     if(!persist()){profile.garden=previous;const msg='저장하지 못했어요. 소품과 씨앗은 그대로예요.';if(modalType==='garden-item')$('garden-purchase-status').textContent=msg;else homeMessage(msg);return;}
     if(modalType)closeModal();renderHome();homeMessage(op==='unequip'?'소품을 보관했어요.':item.name+'을(를) 배치했어요!');audio.play('collect');
+    if(op!=='unequip')revealGardenPlacement(item);
+  }
+  function revealGardenPlacement(item){
+    const hero=$('v2-home').querySelector('.v2-landscape');if(!hero)return;
+    const index=LumiJourney.PROJECTS.filter(p=>p.chapter===item.chapter).findIndex(p=>p.id===item.slot);
+    const placed=hero.querySelector('.v2-placed > [data-slot="'+index+'"]');
+    hero.classList.add('is-revealing');placed?.classList.add('is-new-placement');
+    const note=document.createElement('p');note.className='garden-reveal-note';note.setAttribute('role','status');
+    note.textContent=LumiArt.names[profile.selectedBuddy]+' · '+item.name+'이 우리 정원에 생겼어!';hero.after(note);
+    requestAnimationFrame(()=>{
+      if(screen!=='garden'||!hero.isConnected)return;
+      hero.scrollIntoView({block:'start',behavior:motion.matches?'auto':'smooth'});
+    });
+    setTimeout(()=>{if(hero.isConnected)hero.classList.remove('is-revealing');if(placed?.isConnected)placed.classList.remove('is-new-placement');},1800);
   }
   function homeAct(action,value){
     if(sessionInterrupted||busy||modalType)return;
     unlockAudio();
     if(action==='play')resumeCampaign();
     else if(action==='daily'){if(profile.stars[0]>0)showModal('daily-info');}
-    else if(action==='home'||action==='garden'){if(action==='garden')gardenChapter=Math.ceil((storedSession?.level||profile.unlocked)/10);setScreen(action);}
+    else if(action==='home'||action==='garden'){if(action==='garden')gardenChapter=Number.isInteger(value)?Math.max(1,Math.min(5,value)):Math.ceil((storedSession?.level||profile.unlocked)/10);setScreen(action);}
     else if(action==='chapter'){gardenChapter=Math.max(1,Math.min(5,value));renderHome();$('v2-home').querySelector('[data-chapter="'+gardenChapter+'"]')?.focus({preventScroll:true});}
     else if(action==='purchase')showModal('garden-item',{id:value});
     else if(action==='equip'||action==='unequip')applyGarden(action,value);
     else if(action==='friend')showModal('character',{type:profile.selectedBuddy});
+    else if(action==='restoration'&&Number.isInteger(value)&&value>=1&&value<=profile.unlocked)showModal('level',{id:value});
     else if(['map','album','ranking'].includes(action))showModal(action);
   }
   function gardenItemModal(id){
@@ -684,20 +699,32 @@
   function firstDecoration(){closeModal();gardenChapter=1;setScreen('garden');requestAnimationFrame(()=>$('v2-home').querySelector('[data-item="'+LumiGarden.catalog[0].id+'"]')?.scrollIntoView({block:'center',behavior:'auto'}));}
   function dailyMedals(count){return '<div class="daily-medals" aria-label="메달 '+count+'개">'+['동','은','금'].map((label,i)=>'<span class="'+(i<count?'earned':'')+'">'+icon('star')+'<small>'+label+'</small></span>').join('')+'</div>';}
   function dailyInfoModal(){
-    const info=LumiFun.overview(profile.daily),day=info.active?.day||info.day,theme=LumiFun.definition(day);
+    const info=LumiFun.overview(profile.daily),day=info.active?.day||info.day,record=LumiFun.overview(profile.daily,day),theme=LumiFun.definition(day);
+    const otherDay=day!==info.day,label=otherDay?day.slice(5).replace('-','/'):'오늘';
     modalHeader('DAILY SUNPATCH · '+day.slice(5),'매일 15턴 햇살 도전','excited',null);
     $('modal').classList.add('daily-modal');
     const badges=LumiFun.milestones.map(m=>'<span class="'+(info.days>=m.days?'earned':'')+'">'+icon(info.days>=m.days?'star':'lock')+'<strong>'+esc(m.title)+'</strong><small>'+m.days+'일</small></span>').join('');
-    $('modal-content').innerHTML='<div class="daily-theme"><span>'+icon('spark')+'</span><div><strong>'+esc(theme.title)+'</strong><p>'+esc(theme.description)+'</p></div></div><p class="daily-rules">15턴 · 하루 3회 · 고정 친구 Lv.1 · 부스터 없음<br>같은 날짜에는 같은 보드로 최고 점수에 도전해요.</p>'+dailyMedals(info.medal)+'<div class="daily-stat"><div><small>오늘 최고 점수</small><strong>'+fmt(info.entry.best)+'</strong></div><div><small>남은 도전</small><strong>'+info.remaining+' / 3</strong></div><div><small>전체 최고 기록</small><strong>'+fmt(info.best)+'</strong></div></div><div class="daily-badge-heading"><strong>햇살 도전 칭호</strong><small>완주한 날짜 '+info.days+'일</small></div><div class="daily-badges">'+badges+'</div><p class="save-note">한국 시간 자정에 바뀌어요. 진행 중인 판은 시작한 날짜로 기록합니다. 기록과 칭호는 이 기기에만 저장되며 온라인 순위에 등록되지 않습니다.</p><p id="daily-notice" role="status">'+(!info.eligible?'기기의 날짜가 이전으로 설정되어 있어요.':!info.remaining&&!info.active?'오늘의 도전을 모두 사용했어요. 내일 새로운 보드에서 만나요!':'')+'</p>';
+    $('modal-content').innerHTML='<div class="daily-theme"><span>'+icon('spark')+'</span><div><strong>'+esc(theme.title)+'</strong><p>'+esc(theme.subtitle)+'</p></div></div><p class="daily-rules">15턴 · 하루 3회 · 고정 친구 Lv.1 · 부스터 없음<br>같은 날짜에는 같은 보드로 최고 점수에 도전해요.</p>'+dailyMedals(record.medal)+
+      '<div class="daily-stat"><div><small>'+label+' 최고 점수</small><strong id="daily-record-best" data-day="'+day+'">'+fmt(record.entry.best)+'</strong></div><div><small>'+label+' 남은 도전</small><strong id="daily-record-attempts" data-day="'+day+'">'+record.remaining+' / 3</strong></div><div><small>전체 최고 기록</small><strong>'+fmt(info.best)+'</strong></div></div>'+
+      (otherDay?'<p class="daily-date-note">진행 중인 판은 '+esc(label)+' 기록으로 이어집니다.<br><span id="daily-today-attempts" data-day="'+info.day+'">오늘 새 도전 '+info.remaining+'회</span>는 이 판을 마친 뒤 시작할 수 있어요.</p>':'')+
+      '<div class="daily-badge-heading"><strong>햇살 도전 칭호</strong><small>완주한 날짜 '+info.days+'일</small></div><div class="daily-badges">'+badges+'</div>'+
+      (info.nextBadge?'<p class="daily-next-badge">'+esc(info.nextBadge.title)+'까지 '+(info.nextBadge.days-info.days)+'일 · 연속 접속이 아니어도 쌓여요.</p>':'')+
+      '<p class="save-note">한국 시간 자정에 새 도전이 열려요. 진행 중인 판은 시작한 날짜로 기록합니다. 기록과 칭호는 이 기기에만 저장되며 온라인 순위에 등록되지 않습니다.</p><p id="daily-notice" role="status">'+(!info.eligible?'기기의 날짜가 이전으로 설정되어 있어요.':!info.remaining&&!info.active?'오늘의 도전을 모두 사용했어요. 내일 새로운 보드에서 만나요!':'')+'</p>';
     if(info.active||info.remaining)modalButton(info.active?'진행 중인 도전 이어하기':'오늘의 도전 시작',openDaily,true);
     modalButton('햇살밭으로 돌아가기',goHome,!info.active&&!info.remaining);
   }
   function dailyResultModal(){
-    const r=resultDetails.daily,info=LumiFun.overview(profile.daily);
-    modalHeader('DAILY SUNPATCH · '+(r?.day||dailyDay).slice(5),r?.newBest?'새로운 최고 기록!':'오늘의 도전을 마쳤어요','excited',null);
+    const r=resultDetails.daily,info=LumiFun.overview(profile.daily),day=r?.day||dailyDay,record=LumiFun.overview(profile.daily,day);
+    const otherDay=day!==info.day,label=otherDay?day.slice(5).replace('-','/'):'오늘';
+    modalHeader('DAILY SUNPATCH · '+day.slice(5),r?.newBest?'새로운 최고 기록!':'도전을 마쳤어요','excited',null);
     $('modal').classList.add('result-modal','daily-modal');
-    $('modal-content').innerHTML=dailyMedals(LumiFun.medal(game.score))+'<div class="result-score">'+fmt(game.score)+'</div><span class="result-caption">이번 도전 점수</span><div class="daily-stat"><div><small>오늘 최고</small><strong>'+fmt(r?.best??info.entry.best)+'</strong></div><div><small>최고 연쇄</small><strong>×'+maxCombo+'</strong></div><div><small>남은 도전</small><strong>'+info.remaining+'</strong></div></div>'+(r?.first?'<p class="daily-award">'+icon('check')+'오늘의 완주 도장 획득!</p>':'')+'<p id="v2-result-save" class="v2-result-save" role="status">'+(resultDetails.persisted===false?'기록 저장 실패 · 다시 저장하세요.':'기기 도전 기록 저장 완료')+'</p><p class="save-note">모험의 별·햇살씨앗·친밀도와 분리된 기록이에요.</p>';
-    if(info.remaining)modalButton('한 번 더 도전',openDaily,true);
+    $('modal-content').innerHTML=dailyMedals(LumiFun.medal(game.score))+'<div class="result-score">'+fmt(game.score)+'</div><span class="result-caption">'+label+'에 시작한 15턴의 기록</span>'+
+      '<div class="daily-stat"><div><small>'+label+' 최고</small><strong id="daily-record-best" data-day="'+day+'">'+fmt(r?.best??record.entry.best)+'</strong></div><div><small>최고 연쇄</small><strong>×'+maxCombo+'</strong></div><div><small>'+label+' 남은 도전</small><strong id="daily-record-attempts" data-day="'+day+'">'+record.remaining+' / 3</strong></div></div>'+
+      (otherDay?'<p class="daily-date-note" id="daily-today-attempts" data-day="'+info.day+'">오늘의 새 퍼즐 · '+info.remaining+'회 도전할 수 있어요.</p>':'')+
+      (r?.first?'<p class="daily-award">'+icon('check')+label+'의 완주 도장 획득!</p>':'')+
+      (r?.newBest&&r.previous>0?'<p class="daily-improvement">이전 최고보다 '+fmt(r.score-r.previous)+'점 더 모았어요.</p>':'')+
+      '<p id="v2-result-save" class="v2-result-save" role="status">'+(resultDetails.persisted===false?'기록 저장 실패 · 다시 저장하세요.':'기기 도전 기록 저장 완료')+'</p><p class="save-note">모험의 별·햇살씨앗·친밀도와 분리된 기록이에요.</p>';
+    if(info.remaining)modalButton(otherDay?'오늘의 새 도전':'한 번 더 도전',openDaily,true);
     else modalButton('햇살밭으로 돌아가기',goHome,true);
     if(resultDetails.persisted===false)modalButton('기록 다시 저장',()=>{$('v2-result-save').textContent=persist()?'기기 도전 기록 저장 완료':'아직 저장하지 못했어요.';});
     modalButton('도전 기록 보기',()=>showModal('daily-info'));
@@ -1046,42 +1073,82 @@
       if(up)pulse(node.querySelector('.friendship-result-avatar'));
     }
   }
+  function firstGardenAvailable(){
+    const garden=LumiGarden.summary(profile);
+    return level===1&&garden.balance>=LumiGarden.catalog[0].price&&!garden.garden.owned.some(id=>LumiGarden.catalog.slice(0,2).some(i=>i.id===id));
+  }
   function rewardSummary(win){
     if(!win)return '';
-    const labels={clears:'첫 클리어',stars:'새로 모은 별',promises:'새 약속 도장',chapters:'챕터 완성'};
-    const parts=Object.entries(resultDetails.seedParts||{}).filter(([,n])=>n>0);
     const amount=resultDetails.seedAward||0;
-    const keepsakes=LumiWardrobe.catalog.filter(i=>resultDetails.newKeepsakes?.includes(i.id));
-    return '<section class="v2-reward-ceremony" aria-label="획득 보상"><div class="v2-reward-head"><span class="v2-seed-medal">'+icon('leaf')+'</span><div><small>이번 판에 얻은 햇살씨앗</small><strong>'+(amount?'+'+fmt(amount):'새 보상 없음')+'</strong></div><span class="v2-reward-total">보유 '+fmt(LumiGarden.summary(profile).balance)+'</span></div>'+
-      (parts.length?'<div class="v2-reward-parts">'+parts.map(([kind,n])=>'<span>'+labels[kind]+' <b>+'+n+'</b></span>').join('')+'</div>':'<p class="v2-reward-note">이미 받은 보상은 다시 지급하지 않아요. 새 별과 약속을 모아 보세요.</p>')+
-      (keepsakes.length?'<div class="v2-keepsake-unlock">'+keepsakes.map(i=>'<span>'+LumiWardrobe.illustration(i,'reward-'+(++uid))+'<b>'+esc(LumiArt.names[i.type])+' · '+esc(i.name)+'</b><small>친구 메뉴에서 착용 가능</small></span>').join('')+'</div>':'')+'</section>';
+    return '<section class="v2-reward-ceremony reward-compact" aria-label="획득 보상"><div class="v2-reward-head"><span class="v2-seed-medal">'+icon('leaf')+'</span><div><small>이번 판 햇살씨앗</small><strong>'+(amount?'+'+fmt(amount):'추가 보상 없음')+'</strong></div><span class="v2-reward-total">보유 '+fmt(LumiGarden.summary(profile).balance)+'</span></div></section>';
+  }
+  function resultMoment(){
+    const story=LumiStory.stageForLevel(level,storyDefinition(level)),friend=LumiArt.names[story.speaker];
+    let kind='story',picture=portrait(story.speaker,'happy'),eyebrow=friend+'와 함께 바꾼 하루',title=story.place,body=story.after,action='';
+    const restored=resultDetails.restored?.[0],keepsake=LumiWardrobe.catalog.find(i=>resultDetails.newKeepsakes?.includes(i.id));
+    if(firstGardenAvailable()){
+      const item=LumiGarden.catalog[0];kind='first-garden';picture=LumiHome.decoration(item);eyebrow='첫 퍼즐 → 나의 정원';title='첫 화단을 꾸밀 수 있어요';
+      body='모은 씨앗 '+item.price+'개로 '+item.name+'을 놓아 보세요. 포포가 돌아올 자리가 달라져요.';
+    }else if(restored){
+      const state=LumiJourney.getRestoration(profile,restored.chapter);kind='restoration';eyebrow='우리 손으로 복원 완료';title=restored.name;body=restored.restoredText;
+      picture=LumiArt.landmark(restored.chapter,state.restored,'result-place-'+(++uid),state.projects.map(p=>p.state==='restored'),Boolean(profile.stars[restored.chapter*10-1]));
+      action='<button type="button" data-result-garden="'+restored.chapter+'">변한 정원 보기 →</button>';
+    }else if(keepsake){
+      kind='keepsake';picture=LumiWardrobe.illustration(keepsake,'result-keepsake-'+(++uid));eyebrow=LumiArt.names[keepsake.type]+'와 더 가까워졌어요';title=keepsake.name+' 해금';
+      body='함께 모은 빛으로 친구의 소품이 열렸어요. 지금 착용하면 홈과 퍼즐에서도 함께해요.';
+      action='<button type="button" data-world-friend="'+keepsake.type+'">친구에게 입혀 주기 →</button>';
+    }else if(!resultDetails.firstClear){
+      kind='record';eyebrow='다시 걸으며 남긴 기록';title=resultDetails.newBest?'새로운 최고 기록!':resultDetails.starsAdded?'별 '+resultDetails.starsAdded+'개를 더 모았어요':'다시 함께 걸은 길';
+      body=resultDetails.starsAdded?'별이 더 모여 정원 복원에 가까워졌어요.':resultDetails.newBest?'지난 최고 기록을 넘어섰어요. 이번에 찾은 길을 기억해요.':'이미 받은 씨앗은 유지돼요. 아직 없는 별이나 약속 도장에 도전해 보세요.';
+    }
+    return '<section class="result-moment" data-moment="'+kind+'" aria-label="이번 판의 변화"><span class="result-moment-art" aria-hidden="true">'+picture+'</span><div><small>'+esc(eyebrow)+'</small><h3>'+esc(title)+'</h3><p>'+esc(body)+'</p>'+action+'</div></section>';
+  }
+  function retryAdvice(snapshot){
+    const remaining=snapshot.terrainRemaining||{};
+    if(snapshot.deliveryRemaining>0)return {kind:'delivery',title:'씨앗 '+snapshot.deliveryRemaining+'개를 더 내려야 해요',tip:'금빛 씨앗이 있는 세로줄의 아래쪽을 비워요. 세로 특수 블록을 같은 줄에 놓으면 길게 열 수 있어요.'};
+    if(remaining.crate>0)return {kind:'crate',title:'상자 '+remaining.crate+'칸이 남았어요',tip:'상자는 움직일 수 없어요. 상자 바로 옆에서 매치하거나 특수 블록으로 직접 맞혀요. 두 겹은 두 번 열어요.'};
+    if(remaining.frost>0)return {kind:'frost',title:'서리 '+remaining.frost+'칸이 남았어요',tip:'서리 속 친구는 움직일 수 없어요. 주변 친구를 옮겨 그 칸을 포함한 매치를 만들거나 특수 블록으로 맞혀요.'};
+    if(remaining.weed>0)return {kind:'weed',title:'잡초 '+remaining.weed+'칸이 남았어요',tip:'잡초가 있는 칸이나 바로 옆에서 매치해요. 가장자리 잡초부터 정리하면 마지막 한 칸을 놓치지 않아요.'};
+    const buds=Math.max(0,snapshot.budsGoal-snapshot.bloomed);
+    if(buds)return {kind:'buds',title:'봉오리 '+buds+'개가 남았어요',tip:'봉오리가 있는 바로 그 칸에서 매치해요. 옆칸만 터뜨려서는 열리지 않아요. 두 겹 봉오리는 같은 칸을 두 번 비춰요.'};
+    const color=snapshot.objectives.map(g=>({...g,remaining:Math.max(0,g.target-g.current)})).filter(g=>g.remaining>0).sort((a,b)=>b.remaining-a.remaining)[0];
+    if(color)return {kind:'color',title:LumiArt.names[color.type]+' '+color.remaining+'개를 더 모아요',tip:'완료한 색보다 남은 목표 색을 먼저 찾아요. 무지개 블록이 있다면 '+LumiArt.names[color.type]+'와 바꿔 같은 색을 함께 모아요.'};
+    return {kind:'score',title:'목표 점수까지 '+fmt(Math.max(0,snapshot.target-snapshot.score))+'점',tip:'4개를 모아 특수 블록을 만들고, 특수 블록 두 개를 서로 바꿔 큰 조합을 노려요.'};
   }
   function resultModal(win) {
-    const snapshot=game.snapshot(),stars=snapshot.stars,parts=snapshot.scoreBreakdown;
-    $('modal').classList.add('result-modal');
-    modalHeader(win?'STAGE '+String(level).padStart(2,'0')+' · IN FULL BLOOM':'A NEW LITTLE CHANCE',win?(level===TOTAL?'우리 정원이 완성됐어요!':'행복이 활짝 피었어요!'):'조금만 더, 할 수 있어요',win?'excited':'sleep',game.scoringVersion===4?game.buddy.type:profile.selectedBuddy);
-    const goals=game.snapshot().objectives.map(g=>'<span>'+art(g.type,win?'happy':'idle')+(g.current>=g.target?icon('check'):Math.max(0,g.target-g.current)+' 남음')+'</span>').join('')+
+    const snapshot=game.snapshot(),stars=snapshot.stars,parts=snapshot.scoreBreakdown,advice=win?null:retryAdvice(snapshot);
+    $('modal').classList.add('result-modal','experience-result');
+    modalHeader(win?'STAGE '+String(level).padStart(2,'0')+' · IN FULL BLOOM':'다음 판에서 바꿀 한 가지',win?(level===TOTAL?'우리 정원이 완성됐어요!':resultDetails.firstClear?'함께 한 걸음 더!':'우리의 기록이 반짝여요'):'이번엔 여기까지 왔어요',win?'excited':'wink',game.scoringVersion===4?game.buddy.type:profile.selectedBuddy);
+    const goals=snapshot.objectives.map(g=>'<span>'+art(g.type,win?'happy':'idle')+(g.current>=g.target?icon('check'):Math.max(0,g.target-g.current)+' 남음')+'</span>').join('')+
       (game.budsGoal?'<span>'+icon('flower')+(game.bloomed>=game.budsGoal?icon('check'):(game.budsGoal-game.bloomed)+' 남음')+'</span>':'')+Object.entries(snapshot.terrainRemaining||{}).filter(([kind])=>snapshot.terrainGoal[kind]).map(([kind,n])=>'<span aria-label="'+terrainName(kind)+' '+n+'개 남음">'+terrainIcon(kind)+(n?n+' 남음':icon('check'))+'</span>').join('')+(snapshot.deliveryGoal?'<span aria-label="씨앗 '+snapshot.deliveryRemaining+'개 남음">'+terrainIcon('delivery')+(snapshot.deliveryRemaining?snapshot.deliveryRemaining+' 남음':icon('check'))+'</span>':'');
-    const missing=Math.max(0,LumiRewards.starThresholds(game.target)[2]-game.score);
-    $('modal-content').innerHTML=(win?'<div class="result-stars" aria-label="별 '+stars+'개 획득">'+starMarkup(stars,true)+'</div>':'')+
-      '<div class="result-score">'+fmt(game.score)+'</div><span class="result-caption">우리 함께 모은 반짝임</span>'+rewardSummary(win)+'<p id="v2-result-save" class="v2-result-save" role="status">'+(resultDetails.persisted===false?'기록 저장 실패 · 아래에서 다시 저장하세요.':'기기 기록 저장 완료')+'</p>'+
-      (win && resultDetails.newBest?'<div class="new-record">'+icon('crown')+'이 정원의 새로운 최고 기록!</div>':'')+
-      (win?'<div class="result-star-feedback '+(stars===3?'complete':'')+'">'+icon('star')+'<strong>'+(stars===3?'별 3개, 눈부신 정원 완성!':'별 3개까지 '+fmt(missing)+'점 부족!')+'</strong></div>':'')+
-      (parts?'<details class="v2-result-details"><summary>점수 계산 자세히 보기</summary><dl class="score-breakdown"><div><dt>퍼즐 · 연쇄 점수</dt><dd>'+fmt(parts.matchScore)+'</dd></div>'+
-        (parts.buddyStartBonus+parts.buddyMatchBonus+(parts.buddyFeverBonus||0)?'<div><dt>친구의 응원 보너스</dt><dd>+'+fmt(parts.buddyStartBonus+parts.buddyMatchBonus+(parts.buddyFeverBonus||0))+'</dd></div>':'')+
-        (win&&snapshot.scoringVersion===4?'<div class="bonus-row"><dt>남은 이동 보너스<small>'+game.moves+'회 × '+fmt(parts.moveValue)+'점</small></dt><dd>+'+fmt(parts.moveBonus)+'</dd></div>':'')+
-        (parts.efficiencyBonus?'<div class="bonus-row"><dt>10회 여유 클리어 선물</dt><dd>+'+fmt(parts.efficiencyBonus)+'</dd></div>':'')+'</dl></details>':'')+
+    const labels={clears:'첫 클리어',stars:'새 별',promises:'새 약속 도장',chapters:'챕터 완성'},seedParts=Object.entries(resultDetails.seedParts||{}).filter(([,n])=>n>0);
+    const keepsakes=LumiWardrobe.catalog.filter(i=>resultDetails.newKeepsakes?.includes(i.id));
+    const highlight=[maxCombo>1?'최고 '+maxCombo+'연쇄':'',journeyRun?.metrics.specialsCreated?'특수 블록 '+journeyRun.metrics.specialsCreated+'개 생성':'',win&&game.moves?'이동 '+game.moves+'회 남김':''].filter(Boolean);
+    const details='<details class="v2-result-details result-more"><summary>점수 · 보상 · 약속 자세히</summary><div class="result-detail-body">'+
+      (parts?'<dl class="score-breakdown"><div><dt>퍼즐 · 연쇄 점수</dt><dd>'+fmt(parts.matchScore)+'</dd></div>'+
+        (parts.buddyStartBonus+parts.buddyMatchBonus+(parts.buddyFeverBonus||0)?'<div><dt>친구 응원 보너스</dt><dd>+'+fmt(parts.buddyStartBonus+parts.buddyMatchBonus+(parts.buddyFeverBonus||0))+'</dd></div>':'')+
+        (win&&snapshot.scoringVersion===4?'<div><dt>남은 이동 보너스</dt><dd>+'+fmt(parts.moveBonus)+'</dd></div>':'')+
+        (parts.efficiencyBonus?'<div><dt>10회 여유 클리어 선물</dt><dd>+'+fmt(parts.efficiencyBonus)+'</dd></div>':'')+'</dl>':'')+
+      (seedParts.length?'<div class="v2-reward-parts">'+seedParts.map(([kind,n])=>'<span>'+labels[kind]+' <b>+'+n+'</b></span>').join('')+'</div>':win?'<p class="v2-reward-note">이미 받은 보상은 중복 지급하지 않아요. 새 별과 약속 도장을 모으면 씨앗을 더 얻어요.</p>':'')+
+      (keepsakes.length?'<div class="result-all-keepsakes" aria-label="이번 판에 열린 모든 소품">'+keepsakes.map(i=>'<button type="button" data-world-friend="'+i.type+'">'+LumiWardrobe.illustration(i,'all-keepsakes-'+(++uid))+'<span>'+esc(LumiArt.names[i.type])+' · '+esc(i.name)+'<small>친구에게 입혀 주기 →</small></span></button>').join('')+'</div>':'')+
       '<div class="result-detail"><div><span>남은 횟수</span><strong>'+game.moves+'</strong></div><div><span>최고 연쇄</span><strong>×'+maxCombo+'</strong></div><div><span>피운 꽃</span><strong>'+game.bloomed+'</strong></div></div>'+
-      '<div class="result-goals">'+goals+'</div>'+journeyResultCard(win)+(win?chapterResultCard()+'<div id="result-friendship" class="result-friendship"></div>':'<p>남은 목표를 먼저 보고, 특수 빛모습을 가까이 옮겨봐요.</p>');
-    wireStoryLinks();wireWorldLinks();
-    if(win && level<TOTAL)modalButton('다음 단계로 →',()=>openGarden(level+1),true);
+      (win?'<div class="result-goals">'+goals+'</div>':'')+journeyResultCard(win)+(win?chapterResultCard()+'<div id="result-friendship" class="result-friendship"></div>':'')+
+      '<div id="result-ranking" class="result-ranking"></div><button type="button" class="result-replay" id="result-replay">'+(win?'이 정원 한 번 더':'햇살밭 지도 보기')+'</button></div></details>';
+    $('modal-content').innerHTML=(win?'<div class="result-rating"><div class="result-stars" aria-label="별 '+stars+'개 획득">'+starMarkup(stars,true)+'</div><div class="result-score">'+fmt(game.score)+'<small>점</small></div></div>'+resultMoment():
+      '<section class="retry-coach" data-focus="'+advice.kind+'"><small>남은 목표에서 찾은 다음 요령</small><h3>'+esc(advice.title)+'</h3><p>'+esc(advice.tip)+'</p></section><div class="result-goals">'+goals+'</div><p class="retry-reassurance">모은 별과 정원은 그대로예요. 횟수 제한 없이 다시 도전할 수 있어요.</p>')+
+      (highlight.length?'<div class="result-highlights" aria-label="이번 판의 성취">'+highlight.map(t=>'<span>'+esc(t)+'</span>').join('')+'</div>':'')+
+      rewardSummary(win)+'<p id="v2-result-save" class="v2-result-save" role="status">'+(resultDetails.persisted===false?'기록 저장 실패 · 아래에서 다시 저장하세요.':'기기 기록 저장 완료')+'</p>'+
+      (win&&level<TOTAL?'<div class="result-next-preview"><small>다음에 함께할 일</small><strong>'+String(level+1).padStart(2,'0')+' · '+esc(LumiLevelsFun[level].title)+'</strong></div>':'')+details;
+    wireStoryLinks();wireWorldLinks();updateResultRanking();
+    $('result-replay').addEventListener('click',()=>win?openGarden(level):showModal('map'));
+    $('modal-content').querySelectorAll('[data-result-garden]').forEach(n=>n.addEventListener('click',()=>{gardenChapter=Number(n.dataset.resultGarden);closeModal();setScreen('garden');}));
+    if(win&&firstGardenAvailable()){
+      modalButton('첫 정원 소품 꾸미기',firstDecoration,true);
+      modalButton('다음 단계로 →',()=>openGarden(level+1));
+    }else if(win&&level<TOTAL)modalButton('다음 단계로 →',()=>openGarden(level+1),true);
     else modalButton(win?'햇살밭 지도 둘러보기':'다시 만나러 가기',()=>win?showModal('map'):openGarden(level),true);
-    const rankPanel=document.createElement('div');rankPanel.id='result-ranking';rankPanel.className='result-ranking';$('modal-content').appendChild(rankPanel);updateResultRanking();
-    if(win&&level===1&&!LumiGarden.summary(profile).garden.owned.some(id=>LumiGarden.catalog.slice(0,2).some(i=>i.id===id)))modalButton('첫 정원 소품 꾸미기',firstDecoration);
     if(resultDetails.persisted===false)modalButton('기기 기록 다시 저장',()=>{resultDetails.persisted=rememberSession();$('v2-result-save').textContent=resultDetails.persisted?'기기 기록 저장 완료':'아직 저장할 수 없어요. 저장 공간을 확인해 주세요.';});
-    if(win&&rankRun)modalButton('내 랭킹 확인',()=>showModal('ranking'));
     modalButton('홈으로 돌아가기',goHome);
-    modalButton(win?'이 정원 한 번 더':'햇살밭 지도 보기',()=>win?openGarden(level):showModal('map'));
     updateFriendshipResult();
   }
   function storyScene(chapter,types) {
@@ -1098,6 +1165,19 @@
   function chapterTabs(chapterId,attribute) {
     return '<div class="chapter-tabs world-tabs" role="tablist" aria-label="햇살밭 지역">'+LumiStory.chapters.map(c=>'<button role="tab" aria-selected="'+(chapterId===c.id)+'" '+attribute+'="'+c.id+'" aria-label="'+c.id+'장 '+esc(c.title)+'"><span>'+String(c.id).padStart(2,'0')+'</span><small>'+esc(['새싹','수로','온실','과수원','축제'][c.id-1])+'</small></button>').join('')+'</div>';
   }
+  function storyDefinition(id){
+    if(id===level&&mode==='campaign'&&game){
+      return isV2Game()?(game.rulesRevision===LumiEngineV2.FUN_REVISION?LumiLevelsFun[id-1]:LumiLevelsV2[id-1]):LumiLevels[id-1];
+    }
+    return activeDefinition(id);
+  }
+  function promiseCopy(id,task){
+    const definition=storyDefinition(id);
+    if(!definition.terrain?.length&&!definition.delivery?.length)return {description:task.description,tip:task.tip};
+    const metric=LumiJourney.METRICS[task.metric];
+    const description=!definition.buds.length&&task.description.includes('봉오리')?metric.label+' '+task.target+metric.unit+'에 도전해요.':task.description;
+    return {description,tip:definition.recommendedSkill||task.tip};
+  }
   function updateJourneyHUD() {
     if(!journeyRun)return;
     const status=LumiJourney.status(level,journeyRun),earned=Boolean(profile.journey?.stamps[level-1]);
@@ -1109,25 +1189,25 @@
     $('promise-count').innerHTML=earned?icon('check')+' 도장':fmt(Math.min(status.current,status.target))+' / '+fmt(status.target);
     $('promise-fill').style.width=(earned?100:Math.min(100,status.progress*100))+'%';
     $('promise-button').classList.toggle('complete',status.complete||earned);
-    $('promise-button').setAttribute('aria-label','이번 이야기와 햇살 약속: '+status.task.description+', '+Math.min(status.current,status.target)+' / '+status.target+(earned?', 도장 획득':status.complete?', 이 판을 클리어하면 도장을 받아요':', 선택 목표'));
+    $('promise-button').setAttribute('aria-label','이번 이야기와 햇살 약속: '+promiseCopy(level,status.task).description+', '+Math.min(status.current,status.target)+' / '+status.target+(earned?', 도장 획득':status.complete?', 이 판을 클리어하면 도장을 받아요':', 선택 목표'));
     if(changed&&status.complete&&!earned)pulse($('promise-count'));
   }
   function promiseCard(id,run=null) {
     const status=LumiJourney.status(id,run),earned=Boolean(profile.journey?.stamps[id-1]);
-    const displayed=earned?status.target:Math.min(status.current,status.target);
-    return '<section class="promise-detail '+(earned?'earned':'')+'"><div class="promise-detail-heading"><span class="promise-seal">'+icon(earned?'check':'leaf')+'</span><div><small>선택 목표 · 햇살 약속</small><h3>'+esc(status.task.title)+'</h3></div><b>'+ (earned?'도장 보관 중':Math.min(status.current,status.target)+' / '+status.target)+'</b></div><p>'+esc(status.task.description)+'</p><div class="promise-detail-track" role="progressbar" aria-label="'+(earned?'간직한 햇살 약속 도장':'이번 판 햇살 약속')+'" aria-valuemin="0" aria-valuemax="'+status.target+'" aria-valuenow="'+displayed+'"><span style="width:'+(earned?100:status.progress*100)+'%"></span></div><p class="promise-tip">'+icon('bulb')+esc(status.task.tip)+'</p><small class="promise-rule">'+(earned?'이 단계의 도장은 이미 간직했어요. 다시 도전해도 도장 수는 늘지 않아요.':'이번 판에서 약속을 이루고 클리어하면 도장 1개! 도장은 햇살밭 복원에 쓰여요.')+'<br>약속을 놓쳐도 다음 단계로 갈 수 있어요.</small></section>';
+    const displayed=earned?status.target:Math.min(status.current,status.target),copy=promiseCopy(id,status.task);
+    return '<section class="promise-detail '+(earned?'earned':'')+'"><div class="promise-detail-heading"><span class="promise-seal">'+icon(earned?'check':'leaf')+'</span><div><small>선택 목표 · 햇살 약속</small><h3>'+esc(status.task.title)+'</h3></div><b>'+ (earned?'도장 보관 중':Math.min(status.current,status.target)+' / '+status.target)+'</b></div><p>'+esc(copy.description)+'</p><div class="promise-detail-track" role="progressbar" aria-label="'+(earned?'간직한 햇살 약속 도장':'이번 판 햇살 약속')+'" aria-valuemin="0" aria-valuemax="'+status.target+'" aria-valuenow="'+displayed+'"><span style="width:'+(earned?100:status.progress*100)+'%"></span></div><p class="promise-tip">'+icon('bulb')+esc(copy.tip)+'</p><small class="promise-rule">'+(earned?'이 단계의 도장은 이미 간직했어요. 다시 도전해도 도장 수는 늘지 않아요.':'이번 판에서 약속을 이루고 클리어하면 도장 1개! 도장은 햇살밭 복원에 쓰여요.')+'<br>약속을 놓쳐도 다음 단계로 갈 수 있어요.</small></section>';
   }
   function stageStoryCard(id,after=false) {
-    const story=LumiStory.stageForLevel(id),friend=LumiArt.characters[story.speaker];
+    const story=LumiStory.stageForLevel(id,storyDefinition(id)),friend=LumiArt.characters[story.speaker];
     return '<article class="stage-story-card" style="--story-friend:'+friend.lightColor+'"><span class="stage-story-avatar" aria-hidden="true">'+art(story.speaker,after?'happy':'idle')+'</span><div><small>'+esc(friend.name)+'의 빛씨앗 일기 · '+String(id).padStart(2,'0')+'</small><strong>'+esc(story.place)+'</strong><p>'+esc(after?story.after:story.before)+'</p></div></article>';
   }
   function promiseModal(id) {
     id=Math.max(1,Math.min(profile.unlocked,Math.floor(Number(id)||level)));
-    const def=activeDefinition(id),story=LumiStory.stageForLevel(id);
+    const def=storyDefinition(id),story=LumiStory.stageForLevel(id,def);
     $('modal').classList.add('promise-modal');
     modalHeader('A LITTLE PROMISE · '+String(id).padStart(2,'0'),def.title,'happy',null);
     $('modal-content').innerHTML=worldVignette(def.chapter)+stageStoryCard(id)+
-      '<div class="story-play-link"><span>'+icon('spark')+'이번에 함께 할 일</span><strong>'+esc(def.terrain?.length?def.recommendedSkill:story.action)+'</strong><p>목표 색과 남은 봉오리·장애물을 모두 해결하면 다음 길이 열려요.</p></div>'+
+      '<div class="story-play-link"><span>'+icon('spark')+'이번에 함께 할 일</span><strong>'+esc(def.terrain?.length||def.delivery?.length?def.recommendedSkill:story.action)+'</strong><p>위쪽에 표시된 목표를 모두 채우면 다음 길이 열려요.</p></div>'+
       promiseCard(id,id===level?journeyRun:null)+
       '<button class="world-text-link" id="promise-world">'+icon('leaf')+'도장이 바꾸는 햇살밭 보기 <span>→</span></button>';
     $('promise-world').addEventListener('click',()=>showModal('world',{chapter:def.chapter}));
@@ -1137,8 +1217,7 @@
   function journeyResultCard(win) {
     const status=LumiJourney.status(level,journeyRun),earned=Boolean(profile.journey?.stamps[level-1]),awarded=resultDetails.journey?.awarded;
     const title=awarded?'햇살 약속 도장을 받았어요!':earned?'간직한 약속 위에, 새로운 추억':status.complete?'약속은 이뤘어요. 다음에는 클리어까지!':'다음에는 이 약속도 함께해요';
-    return (win?stageStoryCard(level,true):'')+
-      '<button class="result-promise '+(awarded?'new-stamp':'')+'" data-promise-level="'+level+'"><span class="result-promise-seal">'+icon(awarded||earned?'check':'leaf')+'</span><span><strong>'+title+'</strong><small>'+esc(status.task.title)+' · '+Math.min(status.current,status.target)+' / '+status.target+'</small></span><b aria-hidden="true">›</b></button>'+
+    return '<button class="result-promise '+(awarded?'new-stamp':'')+'" data-promise-level="'+level+'"><span class="result-promise-seal">'+icon(awarded||earned?'check':'leaf')+'</span><span><strong>'+title+'</strong><small>'+esc(status.task.title)+' · '+Math.min(status.current,status.target)+' / '+status.target+'</small></span><b aria-hidden="true">›</b></button>'+
       (resultDetails.restored?.length?'<button class="restoration-earned" data-world-chapter="'+Math.ceil(level/10)+'">'+icon('spark')+'<span><small>햇살밭에 생긴 변화</small><strong>'+resultDetails.restored.map(p=>esc(p.name)).join(' · ')+'</strong><span>우리의 손길로 돌아왔어요. 보러 가기 →</span></span></button>':'');
   }
   function nextJourneyLevel(chapterId) {
@@ -1290,16 +1369,18 @@
   }
   function levelModal(id) {
     if(!Number.isInteger(id) || id<1 || id>profile.unlocked){showModal('map');return;}
-    const def=activeDefinition(id);
+    const def=activeDefinition(id),replacing=Boolean(storedSession&&storedSession.level!==id);
     modalHeader('STAGE '+String(id).padStart(2,'0'),def.title,'happy',def.objectives[0].type);
     $('modal-content').innerHTML=stageStoryCard(id)+'<div class="level-preview-goals">'+
       def.objectives.map(g=>'<span>'+art(g.type)+g.target+'</span>').join('')+
       (def.buds.length?'<span>'+icon('flower')+def.buds.length+'</span>':'')+['weed','frost','crate'].map(kind=>{const n=(def.terrain||[]).filter(t=>t.kind===kind).length;return n?'<span aria-label="'+terrainName(kind)+' '+n+'개">'+terrainIcon(kind)+n+'</span>':'';}).join('')+(def.delivery?.length?'<span aria-label="씨앗 운반 '+def.delivery.length+'개">'+terrainIcon('delivery')+def.delivery.length+'</span>':'')+
       '</div><div class="level-info">이동 '+def.moves+'번 · 최고 기록 '+fmt(profile.bestScores[id-1])+'점</div>'+
       '<p class="level-strategy"><strong>'+esc(def.difficultyLabel)+' · '+('●'.repeat(def.rating||1))+'</strong><br>'+esc(def.recommendedSkill||def.intent||'세 친구의 만남을 찾아보세요.')+'</p>'+
-      '<div class="result-stars">'+starMarkup(profile.stars[id-1])+'</div>'+promiseCard(id,id===level?journeyRun:null);
+      '<div class="result-stars">'+starMarkup(profile.stars[id-1])+'</div>'+promiseCard(id,id===level?journeyRun:null)+
+      (replacing?'<p class="level-resume-notice">'+storedSession.level+'단계 퍼즐이 진행 중이에요. 새 판을 시작하면 그 판의 남은 횟수와 보드는 바뀌며, 모은 별과 정원은 유지돼요.</p>':'');
     if(storedSession?.level===id)modalButton('이어서 놀기',resumeCampaign,true);
-    else modalButton('이 정원에서 놀기',()=>openGarden(id),true);
+    else modalButton(replacing?'이 단계 새 판 시작':'이 정원에서 놀기',()=>openGarden(id),true);
+    if(replacing)modalButton(storedSession.level+'단계 이어하기',resumeCampaign);
     if(ranking.getIdentity())modalButton('이 단계 랭킹 도전',()=>showModal('ranked-start',{id}));
     modalButton('햇살밭 지도로',()=>showModal('map'));
   }
@@ -1488,7 +1569,14 @@
     if(document.hidden){clearHints();LumiMobile.stopFeedback?.();}else scheduleHint();
   });
   window.addEventListener('pagehide',()=>{persist();sessionGuard.release();});
-  window.addEventListener('lumi:back',()=>modalType?closeModal():screen==='play'?showModal('pause'):screen==='garden'?goHome():undefined);
+  window.addEventListener('lumi:back',event=>{
+    if(sessionInterrupted)return;
+    if(backupBusy||recoveryBusy||busy&&!turnInFlight){event.preventDefault();return;}
+    if(modalType){event.preventDefault();closeModal();}
+    else if(screen==='play'){event.preventDefault();showModal('pause');}
+    else if(screen==='garden'){event.preventDefault();goHome();}
+    else if(!persist())event.preventDefault();
+  });
   window.addEventListener('lumi:app-state',e=>{if(sessionInterrupted){fx.setPaused(true);audio.suspend(true);return;}persist();audio.suspend(!e.detail.active||modalType==='pause');fx.setPaused(!e.detail.active||Boolean(modalType&&modalType!=='win'));if(!e.detail.active){clearHints();LumiMobile.stopFeedback?.();}else{scheduleHint();retryRankings();}});
   window.addEventListener('online',retryRankings);
   retryRankings();

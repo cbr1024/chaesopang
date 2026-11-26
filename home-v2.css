@@ -148,6 +148,12 @@ body[data-v2-screen=home] .page-footer,body[data-v2-screen=garden] .page-footer{
   .result-modal .modal-actions .secondary-button{font-size:12px;min-height:44px}
 }
 @media(max-height:650px) and (max-width:520px){
+  .v2-home[data-home-view=home]{display:flex;flex-direction:column}
+  .v2-home[data-home-view=home]>*{order:4;flex-shrink:0}
+  .v2-home[data-home-view=home] .v2-intro{order:0}
+  .v2-home[data-home-view=home] .v2-main-action{order:2}
+  .v2-home[data-home-view=home] .v2-wallet,.v2-home[data-home-view=home] .v2-landscape{order:3}
+  .v2-home[data-home-view=home][data-new-garden=true] .v2-landscape{order:1}
   body[data-v2-screen=play] .stage-heading{margin-bottom:4px}
   body[data-v2-screen=play] .stage-heading h1{font-size:19px;margin:3px 0 4px}
   body[data-v2-screen=play] .score-rail{margin-top:3px;margin-bottom:4px;min-height:27px}
@@ -172,3 +178,68 @@ body[data-v2-screen=home] .page-footer,body[data-v2-screen=garden] .page-footer{
   body[data-v2-screen=play] .mission-bar{padding-block:7px}
   body[data-v2-screen=play] .board-wrap{margin-bottom:2px}
 }
+
+/* The first screen should invite a first move before presenting an empty wallet. */
+.v2-home[data-home-view=home][data-new-garden=true] .v2-wallet{display:none}
+.v2-home[data-home-view=home][data-home-state=fresh] .v2-kicker{display:none}
+.v2-home[data-home-view=home][data-home-state=fresh] .v2-intro{padding-bottom:14px}
+.v2-home[data-home-view=home][data-home-state=fresh] .v2-intro h1{font-size:clamp(23px,6.1vw,29px);margin-top:0}
+.v2-main-action{position:relative;isolation:isolate}
+.v2-stage-story{color:#4e6c50!important}
+.v2-home .daily-home-card.locked{min-height:48px;padding:9px 11px;gap:8px;margin:14px 0 8px;border-radius:14px}
+.v2-home .daily-home-card.locked .daily-home-emblem{width:30px;height:30px;border-radius:10px}
+.v2-home .daily-home-card.locked .daily-home-emblem .icon{width:18px;height:18px}
+.v2-home .daily-home-card.locked>span:nth-child(2){display:flex;flex-wrap:wrap;align-items:center;gap:2px 9px}
+.v2-home .daily-home-card.locked strong{font-size:13px;margin:0}
+.v2-home .daily-home-card.locked small{font-size:12px}
+.v2-restoration-goal{margin:17px 0 0;padding:14px;background:linear-gradient(140deg,#fffdf1,#edf4df);border:1px solid #d4e2c6;border-radius:19px;box-shadow:0 3px 0 #dfe8ce66}
+.v2-goal-heading{display:flex;align-items:center;gap:9px}
+.v2-goal-heading>span{width:32px;height:32px;flex-shrink:0;border-radius:11px;display:grid;place-items:center;background:#f8edbd;color:#b38e39}
+.v2-goal-heading>span .icon{width:21px;height:21px}
+.v2-goal-heading>div{min-width:0;flex:1}
+.v2-goal-heading small{display:block;font-size:11px;line-height:1.4;color:#5a7356}
+.v2-goal-heading h2{font-size:16px;line-height:1.35;word-break:keep-all;margin:3px 0 0;color:#3d6648}
+.v2-goal-heading>b{color:#49754d;font-size:15px;font-variant-numeric:tabular-nums;flex-shrink:0}
+.v2-restoration-goal>p{font-size:12px;line-height:1.55;color:#526c50;margin:9px 0;word-break:keep-all}
+.v2-goal-track{height:6px;border-radius:5px;background:#dae6cc;overflow:hidden;margin:11px 0 9px}
+.v2-goal-track>span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#82b879,#b3c875)}
+.v2-goal-remaining{display:flex;flex-wrap:wrap;gap:5px}
+.v2-goal-remaining>span{padding:5px 7px;border-radius:8px;background:#fffdf2;border:1px solid #e4e5cf;color:#675d3e;font-size:12px;line-height:1.35}
+.v2-goal-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:11px}
+.v2-goal-actions button{flex:1;min-width:110px;min-height:44px;border:1px solid #ccdcbd;background:#fcfff2;border-radius:11px;padding:8px;color:#467047;font-size:12px;font-weight:750;line-height:1.4}
+.v2-goal-actions button:last-child{background:#e1efd4;border-color:#c7dab7}
+.v2-restoration-goal .v2-first-decoration-ready{display:flex;align-items:center;gap:5px;color:#406f45;font-weight:700}
+.v2-first-decoration-ready .icon{width:16px;height:16px;flex-shrink:0}
+.v2-journey-total{margin-top:20px}
+.v2-landscape:focus-visible{outline:3px solid #769e62;outline-offset:4px}
+.v2-landscape.is-revealing{box-shadow:0 5px 0 #bdcf98,0 0 0 4px #f7e6a6,0 12px 24px #577c4220}
+.v2-landscape.is-revealing .v2-placed{z-index:3}
+.v2-placed>[data-slot].is-new-placement{position:relative;z-index:2;animation:v2-placement-reveal .72s cubic-bezier(.18,.72,.24,1) both;filter:drop-shadow(0 0 8px #ffe49b) drop-shadow(0 4px 2px #52754e33)}
+@keyframes v2-placement-reveal{0%{transform:translateY(-12px) scale(.72);opacity:0}55%{transform:translateY(1px) scale(1.13);opacity:1}78%{transform:translateY(-3px) scale(.97)}100%{transform:translateY(0) scale(1);opacity:1}}
+
+/* 320 x 568: keep the full start/resume button above the navigation without scrolling. */
+@media(max-height:650px) and (max-width:520px){
+  .v2-home[data-home-view=home] .v2-kicker{display:none}
+  .v2-home[data-home-view=home] .v2-intro{padding:0 2px 9px}
+  .v2-home[data-home-view=home] .v2-intro h1{font-size:23px;line-height:1.2;margin:0 0 3px}
+  .v2-home[data-home-view=home] .v2-intro p{display:none}
+  .v2-home[data-home-view=home] .v2-wallet{gap:5px;margin-bottom:9px}
+  .v2-home[data-home-view=home] .v2-wallet>span{display:grid;grid-template-columns:15px 1fr;gap:0 4px;min-height:36px;padding:5px;border-radius:11px}
+  .v2-home[data-home-view=home] .v2-wallet .icon{width:15px;height:15px;flex-shrink:0}
+  .v2-home[data-home-view=home] .v2-wallet b{font-size:14px}
+  .v2-home[data-home-view=home] .v2-wallet small{font-size:10px}
+  .v2-home[data-home-view=home] .v2-landscape{min-height:150px;height:150px;aspect-ratio:auto;border-radius:20px}
+  .v2-home[data-home-view=home][data-new-garden=true] .v2-landscape{min-height:142px;height:142px}
+  .v2-home[data-home-view=home] .v2-location{top:7px;left:8px;padding:5px 8px;font-size:11px}
+  .v2-home[data-home-view=home] .v2-cast{width:45%;bottom:7%;left:5%}
+  .v2-home[data-home-view=home] .v2-placed{width:39%;bottom:8%;right:5%}
+  .v2-home[data-home-view=home] .v2-next{margin:12px 2px 8px;gap:8px}
+  .v2-home[data-home-view=home] .v2-next small{font-size:11px}
+  .v2-home[data-home-view=home] .v2-next h2{font-size:17px;margin:3px 0;line-height:1.25}
+  .v2-home[data-home-view=home] .v2-stage-story{font-size:12px;line-height:1.45}
+  .v2-home[data-home-view=home] .v2-map{padding:6px 9px;min-height:50px;gap:3px}
+  .v2-home[data-home-view=home] .v2-play{min-height:60px!important;padding:9px 15px}
+  .v2-home[data-home-view=home] .v2-play>span{font-size:17px}
+  .v2-home[data-home-view=home][data-home-state=fresh] .v2-intro{padding-bottom:11px}
+}
+@media(prefers-reduced-motion:reduce){.v2-placed>[data-slot].is-new-placement{animation:none!important}}

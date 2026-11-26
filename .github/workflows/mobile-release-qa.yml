@@ -27,6 +27,8 @@ jobs:
         run: npx playwright install --with-deps ${{ matrix.engine }}
       - name: Deterministic fun-loop model regression
         run: node qa/fun-loop.test.cjs
+      - name: Native lifecycle and back navigation contract
+        run: node --unhandled-rejections=strict qa/native-lifecycle.test.cjs
       - name: Real portrait browser regression
         env:
           QA_ENGINE: ${{ matrix.engine }}
@@ -38,6 +40,9 @@ jobs:
       - name: Sensory and normal-motion touch regression
         if: success() || failure()
         run: node qa/sensory-browser.cjs
+      - name: First-screen, reward and truthful retry regression
+        if: success() || failure()
+        run: node qa/experience-browser.cjs
       - name: Save exact tested source
         if: always() && matrix.engine == 'chromium'
         run: mkdir -p qa-output && git archive --format=zip HEAD -o qa-output/source.zip

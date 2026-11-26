@@ -31,16 +31,19 @@
   const cap = root.Capacitor;
   let appActive=true,webVibrating=false,lastPointer='';
   document.addEventListener('pointerdown',event=>{lastPointer=event.pointerType||'';},{capture:true,passive:true});
-  const native = Boolean(cap?.isNativePlatform?.());
-  const plugin = name => native ? (cap?.Plugins?.[name] || cap?.registerPlugin?.(name) || null) : null;
+  const native = (() => {try{return Boolean(cap?.isNativePlatform?.());}catch{return false;}})();
+  const plugin = name => {try{return native ? (cap?.Plugins?.[name] || cap?.registerPlugin?.(name) || null) : null;}catch{return null;}};
   const Haptics = plugin('Haptics'), App = plugin('App'), Orientation = plugin('ScreenOrientation');
-  const quiet = promise => Promise.resolve(promise).catch(() => {});
+  // An optional bridge may be missing, reject asynchronously, or throw before
+  // returning a Promise. None of those cases should prevent the web game loading.
+  const quiet = operation => {try{Promise.resolve(operation()).catch(() => {});return true;}catch{return false;}};
   const emit = (name, detail) => root.dispatchEvent(new CustomEvent(name, {detail}));
   const tactile=createFeedback({
     now:()=>performance.now(),
     active:()=>appActive&&!document.hidden,
     send:cue=>{
-      if(Haptics){quiet(cue.notification?Haptics.notification({type:cue.notification}):Haptics.impact({style:cue.style}));return true;}
+      const method=cue.notification?'notification':'impact';
+      if(typeof Haptics?.[method]==='function')return quiet(()=>Haptics[method](cue.notification?{type:cue.notification}:{style:cue.style}));
       if(typeof navigator.vibrate==='function'&&(lastPointer==='touch'||lastPointer==='pen'||Number(navigator.maxTouchPoints)>0||root.matchMedia('(pointer:coarse)').matches)){
         const ok=navigator.vibrate(Array.isArray(cue.pattern)?cue.pattern.slice():cue.pattern);
         webVibrating=ok!==false;return webVibrating;
@@ -51,9 +54,15 @@
   });
   if (native) {
     document.documentElement.classList.add('native-app');
-    quiet(Orientation?.lock({orientation:'portrait'}));
-    quiet(App?.addListener('appStateChange', state => {appActive=Boolean(state.isActive);if(!appActive)tactile.stop();emit('lumi:app-state', {active:appActive});}));
-    quiet(App?.addListener('backButton', () => emit('lumi:back')));
+    quiet(()=>Orientation?.lock?.({orientation:'portrait'}));
+    quiet(()=>App?.addListener?.('appStateChange', state => {appActive=Boolean(state.isActive);if(!appActive)tactile.stop();emit('lumi:app-state', {active:appActive});}));
+    quiet(()=>App?.addListener?.('backButton', () => {
+      // A registered native listener disables Android's default back behavior.
+      // Dialogs, the board and unsaved progress can consume this event; only an
+      // unhandled back from the application's root reaches the native exit.
+      const event=new CustomEvent('lumi:back',{cancelable:true});
+      if(root.dispatchEvent(event))quiet(()=>App?.exitApp?.());
+    }));
   }
   document.addEventListener('visibilitychange',()=>{if(document.hidden)tactile.stop();});
   root.addEventListener('pagehide',()=>tactile.stop());

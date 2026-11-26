@@ -1,0 +1,71 @@
+/* One clear consequence per result. All arithmetic remains in the game model. */
+.experience-result .modal-art{width:44px;height:44px;margin-bottom:0}
+.experience-result h2{font-size:22px;margin:4px 18px 8px}
+.experience-result .result-rating{display:flex;align-items:center;justify-content:center;gap:18px;margin:0 0 10px}
+.experience-result .result-stars{margin:0;gap:4px;display:flex;align-items:center}
+.experience-result .result-stars>svg{width:29px;height:29px}
+.experience-result .result-score{font-size:29px;line-height:1.15;margin:0;color:#52793e;white-space:nowrap}
+.experience-result .result-score small{font-size:11px;margin-left:4px;color:#657854;font-weight:600}
+.result-moment{display:flex;align-items:center;gap:12px;padding:14px 12px;background:linear-gradient(135deg,#edf6de,#fff8dd);border:1px solid #cdddbb;border-radius:20px;text-align:left}
+.result-moment-art{flex:0 0 76px;align-self:center;display:grid;place-items:center;min-width:0}
+.result-moment-art>svg,.result-moment-art>.v2-friend-portrait{width:100%;height:80px;display:block}
+.result-moment>div{flex:1;min-width:0}
+.result-moment small{display:block;color:#657c52;font-size:11px;line-height:1.4}
+.result-moment h3{font-size:17px;line-height:1.4;color:#345b3c;letter-spacing:-.04em;margin:4px 0 5px;word-break:keep-all}
+.result-moment p{font-size:12px!important;line-height:1.65!important;color:#4e6748!important;margin:0!important;word-break:keep-all;overflow-wrap:anywhere}
+.result-moment button{border:0;border-bottom:1px solid #aac58e;background:transparent;color:#3f6b3b;font-size:12px;font-weight:750;min-height:44px;padding:6px 0 0}
+.result-moment[data-moment=restoration]{display:block}
+.result-moment[data-moment=restoration] .result-moment-art{float:right;width:112px;margin:0 -5px 5px 8px}
+.result-moment[data-moment=restoration]::after{content:"";display:table;clear:both}
+.result-highlights{display:flex;flex-wrap:wrap;justify-content:center;gap:5px;margin:9px 0}
+.result-highlights span{border-radius:7px;padding:4px 6px;background:#f0f2df;color:#51674b;font-size:11px;line-height:1.4}
+.experience-result .reward-compact{padding:9px 11px;margin:8px 0;border-radius:14px;animation:none;box-shadow:none}
+.reward-compact .v2-seed-medal{width:34px;height:34px}
+.reward-compact .v2-seed-medal .icon{width:20px;height:20px}
+.reward-compact .v2-reward-head>div{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
+.reward-compact .v2-reward-head strong{font-size:21px;margin:0}
+.reward-compact .v2-reward-head small{font-size:11px}
+.reward-compact .v2-reward-total{font-size:11px}
+.experience-result .v2-result-save{font-size:11px!important;margin:5px 0!important}
+.result-next-preview{text-align:center;padding:7px 8px 6px;line-height:1.45}
+.result-next-preview small{display:block;font-size:10px;color:#708062}
+.result-next-preview strong{font-size:13px;color:#466549}
+.experience-result .result-more{margin:6px 0 0}
+.result-more>summary{font-size:12px;color:#566c4c}
+.result-detail-body{padding-bottom:10px}
+.result-all-keepsakes{display:grid;gap:6px;margin:10px 0}
+.result-all-keepsakes button{display:flex;align-items:center;gap:8px;padding:8px;border:1px solid #d6e1c9;border-radius:10px;background:#fffff6;text-align:left;color:#476549;font-size:12px;min-height:48px}
+.result-all-keepsakes svg{width:34px;height:34px;flex-shrink:0}
+.result-all-keepsakes small{display:block;font-size:11px;margin-top:3px}
+.result-replay{min-height:44px;width:100%;border:1px solid #d5e1c7;border-radius:12px;background:#f5f7e9;color:#506b49;font-size:12px;margin-top:10px}
+.experience-result .modal-actions{margin-top:8px}
+.experience-result .modal-actions .secondary-button:only-child{grid-column:1/-1}
+.retry-coach{text-align:left;background:#fff4df;border:1px solid #ead5a8;border-radius:18px;padding:15px 14px;margin:6px 0 12px}
+.retry-coach>small{font-size:11px;color:#897047}
+.retry-coach h3{font-size:20px;line-height:1.4;color:#6d512e;margin:5px 0 7px;word-break:keep-all}
+.retry-coach p{font-size:13px!important;line-height:1.75!important;color:#705b3e!important;margin:0!important;word-break:keep-all}
+.retry-reassurance{font-size:12px!important;color:#526d4c!important;line-height:1.55!important}
+.garden-reveal-note{margin:10px 3px 16px;padding:10px 12px;border-radius:13px;background:#e9f3d9;border:1px solid #c6dcb6;color:#3c633c;font-size:13px;line-height:1.55;font-weight:650;text-align:center}
+.v2-landscape{scroll-margin-top:10px}
+.daily-date-note,.daily-next-badge,.daily-improvement{padding:10px;border-radius:12px;background:#edf3df;color:#4e6846!important;font-size:12px!important;line-height:1.55!important}
+.daily-date-note{background:#fff4dd;color:#755a30!important}
+.level-resume-notice{padding:10px;border:1px solid #dfd6b9;border-radius:12px;background:#fff8e8;color:#725c37!important}
+@media(max-width:360px){
+  .result-moment{gap:8px;padding:11px 10px}
+  .result-moment-art{flex-basis:59px}
+  .result-moment-art>svg,.result-moment-art>.v2-friend-portrait{height:63px}
+  .result-moment h3{font-size:16px}
+  .experience-result .result-rating{gap:12px;margin-bottom:8px}
+  .experience-result .result-score{font-size:26px}
+}
+@media(max-height:650px) and (max-width:520px){
+  .experience-result .modal-art{width:32px;height:32px}
+  .experience-result>.eyebrow{font-size:8px;min-height:10px;line-height:1.2}
+  .experience-result h2{font-size:19px;margin:3px 18px 6px}
+  .experience-result .result-rating{margin-bottom:7px}
+  .experience-result .result-stars>svg{width:24px;height:24px}
+  .experience-result .result-score{font-size:25px}
+  .experience-result .result-highlights{margin:6px 0}
+  .result-next-preview{padding-block:5px}
+}
+@media(prefers-reduced-motion:reduce){.v2-landscape{scroll-behavior:auto}}

@@ -120,7 +120,7 @@ async function verify(env,tag){
       assert(await page.locator('.v2-reward-ceremony').isVisible(),'reward presentation missing');
       assert((await page.locator('#v2-result-save').textContent()).includes('저장 완료'),'completion save status missing');
       await page.screenshot({path:path.join(OUT,'stage-1-result.png'),fullPage:true});
-      await page.locator('#modal-actions .primary-button').tap();await idle(page);
+      await page.getByRole('button',{name:'다음 단계로 →',exact:true}).tap();await idle(page);
       assert.equal((await saved(page)).session.level,2);
       results.push({tag:'stage 1 full real-touch clear and reward',moves:count,pass:true});await verify(env,'stage 2 transition');
     }
