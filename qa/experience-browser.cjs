@@ -137,7 +137,13 @@ async function firstRewardAndGarden(){
    const scene=document.querySelector('#v2-home .v2-landscape'),item=scene?.querySelector('.v2-placed [data-item-id="'+id+'"]'),nav=document.querySelector('#v2-nav');
    if(!scene||!item||!nav)return false;const b=scene.getBoundingClientRect(),n=nav.getBoundingClientRect();
    return b.top>=0&&b.bottom<n.top-4;
-  },item.id,{timeout:7000});
+  },item.id,{timeout:7000}).catch(async error=>{
+   const layout=await page.evaluate(id=>{
+    const scene=document.querySelector('#v2-home .v2-landscape'),nav=document.querySelector('#v2-nav');
+    return {scrollY,scene:scene?.getBoundingClientRect().toJSON(),nav:nav?.getBoundingClientRect().toJSON(),itemVisible:!!scene?.querySelector('.v2-placed [data-item-id="'+id+'"]')};
+   },item.id);
+   error.message+='; garden layout '+JSON.stringify(layout);throw error;
+  });
   const after=await saved(page);assert.equal(after.profile.garden.equipped[item.slot],item.id);assert.equal(G.summary(after.profile).balance,balance-item.price);
   assert.equal(await page.locator('.v2-placed [data-slot][data-item-id="'+item.id+'"]').count(),1);
   await shot(page,'first-decoration-in-view');

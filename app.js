@@ -658,7 +658,9 @@
     note.textContent=LumiArt.names[profile.selectedBuddy]+' · '+item.name+'이 우리 정원에 생겼어!';hero.after(note);
     requestAnimationFrame(()=>{
       if(screen!=='garden'||!hero.isConnected)return;
-      hero.scrollIntoView({block:'start',behavior:motion.matches?'auto':'smooth'});
+      const safeTop=parseFloat(getComputedStyle(document.querySelector('.app-shell')).paddingTop)||0;
+      const top=Math.max(0,window.scrollY+hero.getBoundingClientRect().top-safeTop-12);
+      window.scrollTo({top,behavior:motion.matches?'auto':'smooth'});
     });
     setTimeout(()=>{if(hero.isConnected)hero.classList.remove('is-revealing');if(placed?.isConnected)placed.classList.remove('is-new-placement');},1800);
   }

@@ -39,7 +39,7 @@
 .result-all-keepsakes small{display:block;font-size:11px;margin-top:3px}
 .result-replay{min-height:44px;width:100%;border:1px solid #d5e1c7;border-radius:12px;background:#f5f7e9;color:#506b49;font-size:12px;margin-top:10px}
 .experience-result .modal-actions{margin-top:8px}
-.experience-result .modal-actions .secondary-button:only-child{grid-column:1/-1}
+.experience-result .modal-actions .secondary-button:last-child:nth-child(2){grid-column:1/-1}
 .retry-coach{text-align:left;background:#fff4df;border:1px solid #ead5a8;border-radius:18px;padding:15px 14px;margin:6px 0 12px}
 .retry-coach>small{font-size:11px;color:#897047}
 .retry-coach h3{font-size:20px;line-height:1.4;color:#6d512e;margin:5px 0 7px;word-break:keep-all}
