@@ -1,10 +1,10 @@
 /* Lumi Garden — local progress, one atomic save, no network or telemetry. */
 (function (root, factory) {
   const node = typeof module === 'object' && module.exports;
-  const api = factory(root, node ? require('./engine.js') : root.LumiEngine, node ? require('./levels.js') : root.LumiLevels, node ? require('./rewards.js') : root.LumiRewards, node ? require('./journey.js') : root.LumiJourney);
+  const api = factory(root, node ? require('./engine.js') : root.LumiEngine, node ? require('./levels.js') : root.LumiLevels, node ? require('./rewards.js') : root.LumiRewards, node ? require('./journey.js') : root.LumiJourney, node ? require('./garden-economy.js') : root.LumiGarden, node ? require('./engine-v2.js') : root.LumiEngineV2, node ? require('./levels-v2.js') : root.LumiLevelsV2, node ? require('./wardrobe.js') : root.LumiWardrobe, node ? require('./levels-fun.js') : root.LumiLevelsFun, node ? require('./fun-loop.js') : root.LumiFun);
   if (node) module.exports = api;
   if (root) root.LumiProgress = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (root, engine, initialLevels, rewards, journey) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (root, engine, initialLevels, rewards, journey, garden, engineV2, levelsV2, wardrobe, levelsFun, fun) {
   'use strict';
 
   const KEY = 'lumi-garden-v3';
@@ -37,8 +37,8 @@
         buddyMemoryLevels: Array(6).fill(1),
         seenSpecials: { row: false, col: false, bomb: false, rainbow: false },
         storySeen: { prologue: false, openings: Array(5).fill(false), endings: Array(5).fill(false) },
-        journey: journey.normalizeProfile(),
-        attempts: Array(count).fill(0), hasSeenTutorial: false, bestScore: 0
+        journey: journey.normalizeProfile(), garden: {version:garden.VERSION,owned:[],equipped:{}}, wardrobe: {version:wardrobe.VERSION,equipped:Array(6).fill(null),greetings:Array(6).fill(null)}, 
+        daily:fun.normalize(null), attempts: Array(count).fill(0), hasSeenTutorial: false, bestScore: 0
       },
       settings: { music: true, sfx: true, haptics: true, volume: 0.45 },
       session: null
@@ -46,7 +46,8 @@
   }
 
   function matchesLevel(game, saved, level) {
-    const levels = initialLevels || root.LumiLevels;
+    const isV2=saved?.version===engineV2.STATE_VERSION;
+    const levels = isV2?(saved.rulesRevision===engineV2.FUN_REVISION?levelsFun:levelsV2):(initialLevels || root.LumiLevels);
     const definition = Array.isArray(levels) ? levels.find(item => item.id === level) : null;
     if (!definition) return false;
     if (game.rows !== 6 || game.cols !== 6 || game.types !== 6 || game.requireScore !== false || game.initialMoves !== definition.moves || game.target !== definition.target) return false;
@@ -54,13 +55,14 @@
     if (goalKey(game.objectives) !== goalKey(definition.objectives)) return false;
     const expectedBuds = Array.from({ length: 6 }, () => Array(6).fill(0));
     for (const bud of definition.buds) expectedBuds[bud.r][bud.c] = bud.hp;
-    return JSON.stringify(saved.initialBuds) === JSON.stringify(expectedBuds);
+    if(JSON.stringify(saved.initialBuds)!==JSON.stringify(expectedBuds))return false;
+    return !isV2 || saved.rulesRevision===definition.rulesRevision && JSON.stringify(saved.initialTerrain)===JSON.stringify(engineV2.normalizeTerrain(definition.terrain,6,6)) && (saved.rulesRevision!==engineV2.FUN_REVISION || JSON.stringify(saved.initialDelivery)===JSON.stringify(engineV2.normalizeDelivery(definition.delivery,6,6,true)));
   }
 
   function normalizeSession(value, profile) {
     if (!record(value) || !validInt(value.level, 1, levelCount()) || value.level > profile.unlocked ||
         !validInt(value.shuffles, 0, 2) || !validInt(value.blasts, 0, 2) || !validInt(value.maxCombo, 0, LIMITS.combo)) return null;
-    const api = engine || root.LumiEngine;
+    const api = value.game?.version===engineV2.STATE_VERSION?engineV2:(engine || root.LumiEngine);
     if (!api || !api.Game || typeof api.Game.fromState !== 'function') return null;
     try {
       const game = api.Game.fromState(value.game);
@@ -98,6 +100,8 @@
       return validInt(saved, 1, 5) ? saved : 1;
     });
     rememberMemories(profile);
+    profile.wardrobe=wardrobe.normalize(source.wardrobe,profile);
+    profile.daily=fun.normalize(source.daily);
     const seen = record(source.seenSpecials) ? source.seenSpecials : {};
     profile.seenSpecials = Object.fromEntries(['row','col','bomb','rainbow'].map(kind => [kind, seen[kind] === true]));
     // V5 story flags are optional presentation data. Existing V2/V3 saves,
@@ -109,6 +113,7 @@
       endings: Array.from({ length: 5 }, (_, i) => Array.isArray(story.endings) && story.endings[i] === true)
     };
     profile.journey = journey.normalizeProfile(source.journey, profile);
+    profile.garden = garden.normalize(source.garden, profile);
     profile.selectedBuddy = boundedInt(source.selectedBuddy, 0, 0, 5);
     profile.maxCombo = boundedInt(source.maxCombo, 0, 0, LIMITS.combo);
     profile.attempts = vector(vector(source.attempts, oldLimit, LIMITS.attempts), count, LIMITS.attempts);

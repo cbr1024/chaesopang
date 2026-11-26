@@ -1,0 +1,55 @@
+name: Mobile release QA
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mobile-release-qa
+  cancel-in-progress: true
+jobs:
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [chromium]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned browser harness
+        run: npm install --no-save --ignore-scripts playwright@1.51.1
+      - name: Install browser binaries
+        run: npx playwright install --with-deps ${{ matrix.engine }}
+      - name: Deterministic fun-loop model regression
+        run: node qa/fun-loop.test.cjs
+      - name: Native lifecycle and back navigation contract
+        run: node --unhandled-rejections=strict qa/native-lifecycle.test.cjs
+      - name: Real portrait browser regression
+        env:
+          QA_ENGINE: ${{ matrix.engine }}
+          DEBUG: pw:browser
+        run: node qa/browser-smoke.cjs
+      - name: Fun loop real touch regression
+        if: success() || failure()
+        run: node qa/fun-browser.cjs
+      - name: Sensory and normal-motion touch regression
+        if: success() || failure()
+        run: node qa/sensory-browser.cjs
+      - name: First-screen, reward and truthful retry regression
+        if: success() || failure()
+        run: node qa/experience-browser.cjs
+      - name: Save exact tested source
+        if: always() && matrix.engine == 'chromium'
+        run: mkdir -p qa-output && git archive --format=zip HEAD -o qa-output/source.zip
+      - name: Keep screenshots, animation and exact test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaesopang-mobile-qa-${{ matrix.engine }}
+          path: qa-output/
+          if-no-files-found: warn

@@ -1,0 +1,34 @@
+/* V2 fun loop — warm, readable daily score attack and new puzzle symbols. */
+.daily-home-card{width:100%;display:flex;align-items:center;gap:11px;text-align:left;padding:12px 13px;margin:17px 0 8px;min-height:74px;border:1px solid #ddc78b;background:linear-gradient(135deg,#fff8db,#f5efd1);border-radius:19px;box-shadow:0 3px 0 #e3d8a9;color:#695b32}
+.daily-home-card>span:nth-child(2){min-width:0;flex:1}.daily-home-card strong{display:block;font-size:17px;line-height:1.3;margin:3px 0;color:#6b552d;letter-spacing:-.025em}
+.daily-home-card small{display:block;font-size:12px;line-height:1.4;color:#746844}.daily-home-card>b{font-size:26px;color:#9d8549}
+.daily-home-emblem{flex-shrink:0;width:44px;height:44px;border-radius:15px;display:grid;place-items:center;color:#a8792e;background:linear-gradient(#fff7cd,#f0d58c);border:1px solid #e6c879}
+.daily-home-emblem .icon{width:25px;height:25px}.daily-home-card.locked{background:#f5f4e7;border-color:#e2e3d4;box-shadow:none}.daily-home-card.locked .daily-home-emblem{color:#7d896e;background:#e7e9d7;border-color:#d7dcc5}
+.daily-home-card:active:not(.locked){transform:translateY(2px);box-shadow:0 1px 0 #e3d8a9}
+.v2-first-garden-note{font-size:12px;line-height:1.5;color:#5e755a;margin:8px 2px 0}
+.daily-theme{display:flex;align-items:center;text-align:left;gap:10px;background:linear-gradient(135deg,#fff6d3,#f3f5e0);border-radius:16px;padding:12px;border:1px solid #e2dab2}
+.daily-theme>span{display:grid;place-items:center;width:44px;height:44px;flex-shrink:0;color:#c09447;background:#fffdf0;border:1px solid #ecd7a4;border-radius:14px}.daily-theme .icon{width:25px;height:25px}
+.daily-theme strong{font-size:16px;color:#705b35}.daily-theme p{font-size:13px!important;line-height:1.5!important;margin:4px 0 0!important;color:#6d674a!important}
+.daily-rules{font-size:13px!important;line-height:1.55!important;color:#546b50!important}
+.daily-medals{display:flex;align-items:center;justify-content:center;gap:11px;margin:14px 0}
+.daily-medals>span{width:54px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#9caa8f}.daily-medals .icon{width:43px;height:43px;filter:drop-shadow(0 2px 0 #9dad9022);opacity:.36}
+.daily-medals>span.earned{color:#a66e45}.daily-medals>span.earned .icon{opacity:1;color:#c99a76}.daily-medals>span:nth-child(2).earned .icon{color:#9aacc1}.daily-medals>span:nth-child(3).earned .icon{color:#d9ad45}
+.daily-medals small{font-size:12px;font-weight:750}.daily-stat{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin:10px 0}
+.daily-stat>div{padding:10px 3px;background:#f3f6e8;border:1px solid #e0e7d4;border-radius:12px;min-width:0}.daily-stat small{display:block;color:#566f52;font-size:11px;line-height:1.35;word-break:keep-all}.daily-stat strong{display:block;font-size:16px;font-variant-numeric:tabular-nums;color:#456747;margin-top:5px}
+.daily-badge-heading{display:flex;align-items:center;justify-content:space-between;margin:15px 0 8px;color:#456747;font-size:14px}.daily-badge-heading small{font-size:12px;color:#60765c}
+.daily-badges{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}.daily-badges>span{display:flex;align-items:center;flex-direction:column;gap:4px;padding:8px 3px;border-radius:12px;background:#f1f1e8;color:#707c67;border:1px solid #e0e4d5}.daily-badges>span.earned{background:#fff5ce;color:#946e35;border-color:#e3cf91}.daily-badges .icon{width:22px;height:22px}.daily-badges strong,.daily-badges small{font-size:11px;text-align:center;line-height:1.3;word-break:keep-all}
+.daily-award{background:#edf5dd;border:1px solid #d7e7bc;padding:9px;border-radius:11px;font-size:13px!important;color:#507748!important;display:flex;align-items:center;justify-content:center;gap:5px}.daily-award .icon{width:16px;height:16px}
+.daily-score-goal{display:flex;align-items:center;gap:7px;color:#6a653f;font-weight:800;font-size:15px;min-height:30px}.daily-score-goal .icon{color:#c29d4c;width:24px;height:24px}
+body[data-v2-mode=daily][data-v2-screen=play] .companion-strip,body[data-v2-mode=daily][data-v2-screen=play] .promise-strip,body[data-v2-mode=daily][data-v2-screen=play] #shuffle-button,body[data-v2-mode=daily][data-v2-screen=play] #blast-button{display:none!important}
+body[data-v2-mode=daily] .boosters{justify-content:center}body[data-v2-mode=daily] #hint-button{width:min(100%,180px)}
+body[data-v2-mode=daily] #finish-map{display:none}
+.v2-terrain[data-kind=crate]{border:2px solid #9e6b44;background:linear-gradient(145deg,#e6bb8740,#c9916233);box-shadow:inset 0 0 0 2px #ffe8c46b}
+.v2-terrain[data-kind=crate]::before{content:"";position:absolute;inset:4px;border-radius:9px;border:1px dashed #c18c5b;pointer-events:none}
+.v2-terrain[data-kind=crate] svg{width:46%;height:46%}
+.v2-delivery-marker{position:absolute;z-index:7;display:flex;align-items:center;justify-content:center;width:calc(var(--cell)*.5);height:calc(var(--cell)*.5);min-width:19px;min-height:19px;pointer-events:none;transition:top .22s cubic-bezier(.22,.84,.36,1);border:1.5px solid #d5a24b;background:#fff5cf;border-radius:50%;box-shadow:0 2px 4px #85682e55}
+.v2-delivery-marker svg{width:92%;height:92%;display:block}
+.v2-delivery-marker b{position:absolute;right:-3px;bottom:-4px;min-width:13px;height:13px;background:#fffdf1;border:1px solid #c2a36b;border-radius:50%;font-size:9px;line-height:11px;text-align:center;color:#785824}
+.v2-delivery-marker.delivered{opacity:.76;border-color:#8daf70;background:#eef7d6}.v2-delivery-marker.delivered b{color:#447344;border-color:#9abe83}
+.goal-crate{color:#a47244}.goal-delivery{color:#be9144}.goal-crate .icon,.goal-delivery .icon{width:100%;height:100%}
+@media(max-width:350px){.daily-home-card strong{font-size:15px}.daily-stat strong{font-size:14px}.daily-home-emblem{width:39px;height:39px}.daily-badges strong{font-size:10px}}
+@media(prefers-reduced-motion:reduce){.v2-delivery-marker{transition:none}}

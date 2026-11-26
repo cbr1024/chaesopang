@@ -14,7 +14,7 @@
   const channels=['x','y','sx','sy','a','o'];
   const velocityKeys=['vx','vy','vsx','vsy','va','vo'];
   const transform = state => `translate3d(${state.x.toFixed(3)}px,${state.y.toFixed(3)}px,0) rotate(${state.a.toFixed(3)}deg) scale(${state.sx.toFixed(4)},${state.sy.toFixed(4)})`;
-  const TIMING=Object.freeze({swapGate:150,swapTail:330,invalidGate:165,invalidTail:360,popGate:168,popTail:238,landingGate:46,landingTail:236,dragTail:155,selectionTail:340});
+  const TIMING=Object.freeze({swapGate:122,swapTail:285,invalidGate:132,invalidTail:265,popGate:142,popTail:220,landingGate:34,landingTail:198,dragTail:120,selectionTail:245});
   // Exact damped harmonic motion, expressed in pixels and milliseconds.
   function spring(from,to,velocity,t,omega=.027,zeta=.74) {
     const d=from-to;
@@ -35,7 +35,7 @@
     };
   }
   function fallTrajectory(from,to,{delay=0,tilt=0}={}) {
-    const distance=Math.max(1,to.y-from.y),flight=clamp(Math.sqrt(2*distance/.0074),125,360);
+    const distance=Math.max(1,to.y-from.y),flight=clamp(Math.sqrt(2*distance/.0094),108,295);
     const v0=clamp(from.vy || 0,-.7,distance/flight*.45),gravity=2*(distance-v0*flight)/(flight*flight);
     const impact=v0+gravity*flight,stretch=clamp(impact*.055,.035,.125),energy=clamp(impact/1.8,.25,1);
     const duration=delay+flight+TIMING.landingTail;
@@ -57,7 +57,7 @@
   }
   function popTrajectory(from,{delay=0}={}) {
     return elapsed=> {
-      const t=elapsed-delay;
+      const t=(elapsed-delay)*238/TIMING.popTail;
       if(t<=0) return {...from};
       const driftX=(from.vx || 0)*t*Math.exp(-t/32),driftY=(from.vy || 0)*t*Math.exp(-t/28);
       let sx,sy,lift;
@@ -76,6 +76,7 @@
       this.board=board; this.tiles=tiles; this.budLayer=budLayer; this.cells=cells; this.wrap=wrap || board;
       this.fx=fx; this.onChoose=onChoose; this.onSwap=onSwap; this.onInteract=onInteract; this.onEscape=onEscape; this.onCue=onCue;
       this.nodes=new Map(); this.tileNodes=this.nodes; this.budNodes=new Map(); this.rowNodes=[];
+      this.terrainLayer=board.querySelector('.terrain-layer');this.terrainNodes=new Map();
       this.rows=6; this.cols=6; this.cellSize=52; this.step=56;
       this.chapter=1; this.restoredCount=0; this.chapterCleared=false; this._landmarkSignature="";
       this.selected=null; this.pointer=null; this.snapshot=null; this.disabled=false; this.blastMode=false;
@@ -135,7 +136,7 @@
     _nodeAt(p) { const tile=this._inside(p) && this.snapshot?.board[p.r]?.[p.c]; return tile ? this.nodes.get(tile.id) || null : null; }
     _targetPosition(target) {
       const node=target?.closest?.('.tile');
-      if (!node || !this.tiles.contains(node)) return null;
+      if (!node || !this.tiles.contains(node) || node.classList.contains('retiring') || this.nodes.get(node.dataset.id)!==node) return null;
       const p={r:Number(node.dataset.r),c:Number(node.dataset.c)};
       return this._inside(p) ? p : null;
     }
@@ -175,8 +176,9 @@
 
     _write(node,state) {
       this._states.set(node,{...state});
-      node.style.transform=transform(state);
-      node.style.opacity=String(clamp(state.o,0,1));
+      const matrix=transform(state),opacity=String(clamp(state.o,0,1));
+      if(node.style.transform!==matrix)node.style.transform=matrix;
+      if(node.style.opacity!==opacity)node.style.opacity=opacity;
     }
     _stateAt(node,time=clock()) {
       const track=this._tracks.get(node);
@@ -196,7 +198,7 @@
     _motion(node,build) {
       const start=clock(),from=this._stateAt(node,start); this._stopTrack(node);
       const spec=build(from),duration=Math.max(0,spec.duration || 0),final=spec.final || spec.sample(duration);
-      if(this.reducedMotion || duration===0) { this._write(node,final); spec.finish?.(); return Promise.resolve(); }
+      if(this.reducedMotion || duration===0) { this._write(node,final);node.classList.remove('moving'); spec.finish?.(); return Promise.resolve(); }
       this._write(node,from); node.classList.add('moving');
       let resolve,settledResolve;
       const gatePromise=new Promise(done=>resolve=done),settled=new Promise(done=>settledResolve=done);
@@ -313,6 +315,31 @@
       for(const [key,node] of this.budNodes) if(!keep.has(key)) { this.budNodes.delete(key); if(!this._retiring.has(node)) this._forget(node); }
     }
 
+    _renderTerrain(snapshot) {
+      if(!this.terrainLayer)return;
+      const keep=new Set();
+      for(let r=0;r<this.rows;r++)for(let c=0;c<this.cols;c++){
+        const t=snapshot.terrain?.[r]?.[c];if(!t)continue;
+        const key=r+':'+c;keep.add(key);let node=this.terrainNodes.get(key);
+        if(!node){
+          node=document.createElement('span');node.className='v2-terrain';node.setAttribute('aria-hidden','true');
+          node.style.left='calc(var(--step) * '+c+')';node.style.top='calc(var(--step) * '+r+')';
+          this.terrainLayer.appendChild(node);this.terrainNodes.set(key,node);
+        }
+        if(node.dataset.kind!==t.kind){
+          node.dataset.kind=t.kind;
+          node.innerHTML=t.kind==='crate'?'<svg viewBox="0 0 30 30" aria-hidden="true"><rect x="3" y="3" width="24" height="24" rx="5" fill="#c38e5c" stroke="#78553d" stroke-width="1.6"/><path d="M4 10h22M4 20h22M7 24 23 6" stroke="#98623e" stroke-width="3" stroke-linecap="round"/><path d="M6 5h17M5 7v15" stroke="#f4d4a1" stroke-width="1.5" stroke-linecap="round"/><circle cx="15" cy="15" r="4" fill="#fff0c2" stroke="#93653c"/></svg><b></b>':t.kind==='weed'?'<svg viewBox="0 0 30 30" aria-hidden="true"><path d="M15 27Q5 18 3 7q12 2 13 14Q14 7 21 2q5 13-2 22Q25 14 28 16q0 8-13 11" fill="#77a45b" stroke="#496c43" stroke-width="1.5" stroke-linejoin="round"/></svg><b></b>':'<svg viewBox="0 0 30 30" aria-hidden="true"><path d="M15 2v26M4 8l22 14M4 22L26 8M10 5l5 4 5-4M10 25l5-4 5 4" fill="none" stroke="#5689b1" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><b></b>';
+        }
+        node.dataset.hp=String(t.hp);node.querySelector('b').textContent=t.hp>1?'2':'';
+      }
+      for(const seed of snapshot.delivery||[]){
+        const key='seed:'+seed.c;keep.add(key);let node=this.terrainNodes.get(key);
+        if(!node){node=document.createElement('span');node.className='v2-delivery-marker';node.setAttribute('aria-hidden','true');node.innerHTML='<svg viewBox="0 0 30 30"><path d="M15 4Q26 15 22 23c-3 6-11 6-14 0Q4 15 15 4Z" fill="#f1c569" stroke="#b47f38" stroke-width="2"/><path d="M15 18V8m0 7 6-4" stroke="#6e8f47" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M11 22l4 4 4-4" fill="none" stroke="#fff5d0" stroke-width="2" stroke-linecap="round"/></svg><b></b>';node.style.left='calc(var(--step) * '+seed.c+' + 2px)';this.terrainLayer.appendChild(node);this.terrainNodes.set(key,node);}
+        node.style.top='calc(var(--step) * '+seed.r+' + 2px)';node.dataset.row=String(seed.r);node.dataset.column=String(seed.c);node.classList.toggle('delivered',seed.r===this.rows-1);node.querySelector('b').textContent=seed.r===this.rows-1?'✓':String(this.rows-1-seed.r);
+      }
+      for(const [key,node] of this.terrainNodes)if(!keep.has(key)){this.terrainNodes.delete(key);node.remove();}
+    }
+
     async render(snapshot,kind='static') {
       if(!snapshot?.board || this._disposed) return;
       const epoch=this._epoch,keep=new Set(),pending=[],newCounts=Array(this.cols).fill(0);
@@ -328,8 +355,9 @@
         else if(Number(node.dataset.type)!==tile.type || node.dataset.special!==(tile.special || '')) this._paint(node,tile);
         node.dataset.r=String(r); node.dataset.c=String(c);
         node.setAttribute('aria-rowindex',String(r+1)); node.setAttribute('aria-colindex',String(c+1));
-        const bud=Number(snapshot.buds?.[r]?.[c]) || 0;
-        node.setAttribute('aria-label',(r+1)+'행 '+(c+1)+'열, '+root.LumiArt.names[tile.type]+(tile.special?', '+(specialNames[tile.special] || tile.special):'')+(bud?', 꽃봉오리 '+bud+'겹, '+(root.LumiArt.chapterBuds?.[this.chapter-1]||'새싹 봉오리'):''));
+        const bud=Number(snapshot.buds?.[r]?.[c]) || 0,terrain=snapshot.terrain?.[r]?.[c];
+        node.dataset.frozen=String(['frost','crate'].includes(terrain?.kind));
+        node.setAttribute('aria-label',(r+1)+'행 '+(c+1)+'열, '+root.LumiArt.names[tile.type]+(tile.special?', '+(specialNames[tile.special] || tile.special):'')+(bud?', 꽃봉오리 '+bud+'겹, '+(root.LumiArt.chapterBuds?.[this.chapter-1]||'새싹 봉오리'):'')+(terrain?', '+(terrain.kind==='weed'?'잡초':terrain.kind==='crate'?'상자, 교환 불가':'서리, 교환 불가')+' '+terrain.hp+'겹':'')+((snapshot.delivery||[]).some(s=>s.r===r&&s.c===c)?r===this.rows-1?', 씨앗 전달 완료':', 금빛 씨앗, 아래 '+(this.rows-1-r)+'칸 남음':''));
         node.setAttribute('aria-disabled',String(this.disabled));
         node.tabIndex=same(this._focus,{r,c})?0:-1;
         const active=same(this.selected,{r,c});
@@ -375,7 +403,7 @@
       for(const [id,node] of [...this.nodes]) if(!keep.has(id)) {
         this.nodes.delete(id); if(!this._retiring.has(node)) this._forget(node);
       }
-      this._renderBuds(snapshot);
+      this._renderBuds(snapshot);this._renderTerrain(snapshot);
       // ARIA ownership follows logical rows without moving live DOM elements.
       for(let r=0;r<this.rows;r++) this.rowNodes[r].setAttribute('aria-owns',
         snapshot.board[r].filter(Boolean).map(tile=>this.nodes.get(tile.id)?.id).filter(Boolean).join(' '));
@@ -390,14 +418,17 @@
     async clear(event) {
       if(this._disposed) return;
       const epoch=this._epoch,pending=[],removed=event.cells || [],created=event.created || [],activated=event.activated || [];
-      const scored=[...removed,...created],origin=scored[0] || {r:0,c:0}; let x=0,y=0;
+      const scored=[...removed,...created],origin=event.specialComboOrigin||scored[0]||{r:0,c:0}; let x=0,y=0;
+      const burstLimit=this.reducedMotion?4:removed.length>=18?10:removed.length>=9?8:removed.length;
+      const impactAt=event.specialCombo?72:66;
+      const burstIndexes=new Set(Array.from({length:burstLimit},(_,i)=>Math.floor(i*removed.length/Math.max(1,burstLimit))));
       for(const p of scored) { const point=this.center(p.r,p.c); x+=point.x; y+=point.y; }
-      for(const p of removed) {
+      for(const [index,p] of removed.entries()) {
         const node=this.nodes.get(p.tile.id);
-        const delay=Math.min(36,Math.hypot(p.r-origin.r,p.c-origin.c)*7);
-        this._cue(82+delay,()=> {
+        const delay=Math.min(28,Math.hypot(p.r-origin.r,p.c-origin.c)*5);
+        if(burstIndexes.has(index))this._cue(impactAt+delay,()=> {
           const point=this.center(p.r,p.c);
-          this.fx?.burst?.(point.x,point.y,root.LumiArt.colors[p.tile.type],Math.min(1.5,.72+(event.combo || 1)*.12),p.tile.type);
+          this.fx?.burst?.(point.x,point.y,root.LumiArt.colors[p.tile.type],Math.min(1.5,.72+(event.combo || 1)*.12),p.tile.type,removed.length>=9?9:undefined);
         });
         if(node) {
           // Keep the original SVG: rebuilding every matched face was a source
@@ -434,9 +465,24 @@
           this.fx?.shockwave?.(point.x,point.y,root.LumiArt.colors[p.tile.type],{type:p.tile.type,rainbow:p.tile.special==='rainbow'});
         });
       }
-      this._cue(82,()=> {
+      this._cue(impactAt,()=> {
         this.onCue?.('impact',event);
-        for(const p of activated) {
+        const combo=event.specialCombo,combined=event.specialComboOrigin;
+        if(combo&&combined){
+          const center=this.center(combined.r,combined.c),ink='#efd27c';
+          this.fx?.comboImpact?.(center.x,center.y,combo,this.cellSize);
+          if(combo==='line-line'){
+            this.fx?.beam?.(center.x,center.y,'row',ink);
+            this.fx?.beam?.(center.x,center.y,'col',ink);
+          }else if(combo==='line-bomb'){
+            for(let d=-1;d<=1;d++){
+              if(combined.r+d>=0&&combined.r+d<this.rows){const p=this.center(combined.r+d,combined.c);this.fx?.beam?.(p.x,p.y,'row',ink);}
+              if(combined.c+d>=0&&combined.c+d<this.cols){const p=this.center(combined.r,combined.c+d);this.fx?.beam?.(p.x,p.y,'col',ink);}
+            }
+          }else this.fx?.shockwave?.(center.x,center.y,ink,{rainbow:combo.startsWith('rainbow'),scale:combo==='bomb-bomb'?1.6:1.25});
+        }
+        const ingredients=event.specialComboIngredients||[];
+        for(const p of activated.filter(p=>!ingredients.some(q=>same(q,p))).slice(0,this.reducedMotion?2:6)) {
           const point=this.center(p.r,p.c);
           if(p.tile.special==='row'||p.tile.special==='col') this.fx?.beam?.(point.x,point.y,p.tile.special,root.LumiArt.colors[p.tile.type]);
           else this.fx?.shockwave?.(point.x,point.y,root.LumiArt.colors[p.tile.type],{type:p.tile.type,rainbow:p.tile.special==='rainbow'});
@@ -462,13 +508,22 @@
           }));
         }
       }
+      for(const [hitIndex,hit] of (event.terrainHit||[]).entries())this._cue(82,()=>{
+        const point=this.center(hit.r,hit.c),color=hit.kind==='weed'?'#78aa61':hit.kind==='crate'?'#c28d58':'#75b8dc';
+        if(hitIndex<6){if(hit.after)this.fx?.shockwave?.(point.x,point.y,color,{type:0,scale:.55});else this.fx?.burst?.(point.x,point.y,color,1.1,0,8);}
+        const n=this.terrainNodes.get(hit.r+':'+hit.c);if(n&&!this.reducedMotion)n.animate([{scale:'1',opacity:1},{scale:'1.13',opacity:.65},{scale:'1',opacity:hit.after?1:.15}],{duration:160,easing:'ease-out'});
+      });
+      for(const hit of event.deliveryHit||[])this._cue(90,()=>{
+        const p=this.center(hit.after,hit.c);if(hit.delivered)this.fx?.shockwave?.(p.x,p.y,'#e7b955',{scale:.8});else this.fx?.burst?.(p.x,p.y,'#e7b955',.8,0,7);
+      });
       for(const p of event.bloomedCells || (event.budsHit || []).filter(hit=>!hit.after)) this._cue(95,()=> {
         const point=this.center(p.r,p.c),source=scored.find(cell=>cell.r===p.r&&cell.c===p.c);
         this.fx?.bloom?.(point.x,point.y,root.LumiArt.colors[source?.tile.type ?? 0]);
       });
-      if((activated.length || event.combo>2) && !this.reducedMotion) this._cue(80,()=> {
-        this._motion(this.wrap,from=>({duration:250,gate:0,final:pose(),sample:t=>({
-          ...from,x:1.8*Math.exp(-t/65)*Math.sin(t/14),y:1.1*Math.exp(-t/60)*Math.sin(t/17),sx:1,sy:1,a:0,o:1
+      if((event.specialCombo||activated.length || event.combo>2) && !this.reducedMotion) this._cue(impactAt,()=> {
+        const amplitude=event.specialCombo?3.3:Math.min(2.4,1.1+(event.combo||1)*.25);
+        this._motion(this.wrap,from=>({duration:215,gate:0,final:pose(),sample:t=>({
+          ...from,x:amplitude*Math.exp(-t/56)*Math.sin(t/13),y:amplitude*.47*Math.exp(-t/58)*Math.sin(t/16),sx:1,sy:1,a:0,o:1
         })}));
       });
       await Promise.all(pending);
@@ -529,10 +584,14 @@
     _clearSwapTarget() {
       for(const node of this.nodes.values()) node.classList.remove('swap-target');
     }
+    _directDrag(node,target,vx,vy){
+      this._stopTrack(node);node.classList.remove('moving');
+      this._write(node,{...target,vx:clamp(vx,-1.1,1.1),vy:clamp(vy,-1.1,1.1)});
+    }
     _drag(press,dx,dy) {
       if(this.blastMode) return;
       const distance=Math.max(Math.abs(dx),Math.abs(dy));
-      if(distance<3) return;
+      if(distance<3&&!press.axis) return;
       const axis=Math.abs(dx)>Math.abs(dy)?'x':'y';
       if(!press.axis || distance<this.step*.18) press.axis=axis;
       const now=clock(),dt=Math.max(1,now-press.lastTime);
@@ -542,7 +601,7 @@
         press.lastTime=now;
       }
       press.lastX=dx;press.lastY=dy;
-      const target=this._swipeTarget(press,dx,dy),neighbor=this._nodeAt(target);
+      const target=this._swipeTarget(press,dx,dy),frozen=['frost','crate'].includes(this.snapshot?.terrain?.[press.start.r]?.[press.start.c]?.kind)||(target&&['frost','crate'].includes(this.snapshot?.terrain?.[target.r]?.[target.c]?.kind)),neighbor=frozen?null:this._nodeAt(target);
       if(press.neighbor && press.neighbor!==neighbor) {
         press.neighbor.classList.remove('swap-target');
         this._springNode(press.neighbor,this._home(press.neighbor),{duration:290,omega:.032,zeta:.78});
@@ -551,19 +610,20 @@
       const along=press.axis==='x'?dx:dy,sign=Math.sign(along),amount=Math.abs(along),limit=this.step;
       const travel=neighbor
         ? sign*(amount<=limit?amount:limit+limit*.14*(1-Math.exp(-(amount-limit)/(limit*.28))))
-        : sign*limit*.22*(1-Math.exp(-amount/(limit*.22)));
-      const cross=clamp((press.axis==='x'?dy:dx)*.12,-this.step*.1,this.step*.1);
+        : sign*limit*(frozen?.08:.22)*(1-Math.exp(-amount/(limit*.22)));
+      const cross=frozen?0:clamp((press.axis==='x'?dy:dx)*.12,-this.step*.1,this.step*.1);
       const base=this._position(press.start.r,press.start.c);
       const desired=pose(base.x+(press.axis==='x'?travel:cross),base.y+(press.axis==='y'?travel:cross)-3.5,1.055,1.055,
         press.axis==='x'?clamp(travel/this.step*2.2,-2.2,2.2):0);
       press.node.classList.add('dragging');
-      this._springNode(press.node,desired,{duration:TIMING.dragTail,gate:110,omega:.105,zeta:1});
+      const vx=frozen?0:press.axis==='x'?press.vx:press.vx*.12,vy=frozen?0:press.axis==='y'?press.vy:press.vy*.12;
+      this._directDrag(press.node,desired,vx,vy);
       if(neighbor) {
         neighbor.classList.add('swap-target');
         const p=clamp(Math.abs(travel)/this.step,0,1),home=this._position(target.r,target.c),shift=sign*this.step*p;
         const preview=pose(home.x-(press.axis==='x'?shift:0),home.y-(press.axis==='y'?shift:0)-(press.axis==='x'?Math.sin(Math.PI*p)*2.5:0),
           1-.035*Math.sin(Math.PI*p),1-.035*Math.sin(Math.PI*p),-sign*1.5*Math.sin(Math.PI*p));
-        this._springNode(neighbor,preview,{duration:TIMING.dragTail,gate:110,omega:.095,zeta:1});
+        this._directDrag(neighbor,preview,press.axis==='x'?-vx:0,press.axis==='y'?-vy:0);
       }
     }
     _releasePointer(mode='cancel') {
@@ -574,7 +634,7 @@
       // Hold the exact live pose on commit. render('swap') retargets both
       // pieces, including their current velocity, without a home snap.
       if(mode==='cancel') for(const node of [press.node,press.neighbor].filter(Boolean))
-        this._springNode(node,this._home(node),{duration:320,gate:170,omega:.028,zeta:.74});
+        this._springNode(node,this._home(node),{duration:245,gate:132,omega:.037,zeta:.79});
       try {if(this.board.hasPointerCapture?.(press.id))this.board.releasePointerCapture(press.id);}catch{}
       return press;
     }
@@ -589,22 +649,23 @@
           this.pointer={id:event.pointerId,start:p,x:event.clientX,y:event.clientY,node,axis:null,neighbor:null,
             scale:this.board.clientWidth?rect.width/this.board.clientWidth:1,lastX:0,lastY:0,lastTime:now,vx:0,vy:0};
           const home=this._position(p.r,p.c);
-          if(!this.blastMode)this._springNode(node,pose(home.x,home.y-3.5,1.055,1.055),{duration:230,omega:.037,zeta:.78});
+          if(!this.blastMode)this._springNode(node,pose(home.x,home.y-3.5,1.055,1.055),{duration:145,omega:.05,zeta:.85});
           if(event.pointerType==='mouse')this.focusAt(p);
           try{this.board.setPointerCapture(event.pointerId);}catch{}
         },
         pointermove:event=> {
           const press=this.pointer;if(!press || press.id!==event.pointerId)return;
           if(this.disabled){this._releasePointer('cancel');return;}
-          this._drag(press,(event.clientX-press.x)/press.scale,(event.clientY-press.y)/press.scale);
+          const samples=event.getCoalescedEvents?.()||[];const latest=samples.length?samples[samples.length-1]:event;
+          this._drag(press,(latest.clientX-press.x)/press.scale,(latest.clientY-press.y)/press.scale);
         },
         pointerup:event=> {
           const press=this.pointer;if(!press || press.id!==event.pointerId)return;
           const dx=(event.clientX-press.x)/press.scale,dy=(event.clientY-press.y)/press.scale;
           this._drag(press,dx,dy);
           const distance=Math.max(Math.abs(dx),Math.abs(dy));
-          const flick=Math.max(Math.abs(press.vx),Math.abs(press.vy))>.55 && clock()-press.lastTime<80;
-          const swipe=!this.blastMode && (distance>Math.max(12,this.cellSize*.24) || (distance>9 && flick));
+          const flick=Math.max(Math.abs(press.vx),Math.abs(press.vy))>.45 && clock()-press.lastTime<90;
+          const swipe=!this.blastMode && (distance>Math.max(10,this.cellSize*.21) || (distance>8 && flick));
           const target=swipe?this._swipeTarget(press,dx,dy):null;
           this._releasePointer(swipe && target?'hold':swipe?'cancel':'hold');
           this._suppressClickUntil=Date.now()+350;if(this.disabled)return;
@@ -616,7 +677,7 @@
           Promise.resolve().then(()=>{
             if(version!==this._renderVersion || epoch!==this._epoch || this._disposed)return;
             for(const node of [press.node,press.neighbor].filter(Boolean))if(this.nodes.get(node.dataset.id)===node)
-              this._springNode(node,this._home(node),{duration:310,gate:165,omega:.029,zeta:.76});
+              this._springNode(node,this._home(node),{duration:245,gate:132,omega:.036,zeta:.79});
           });
         },
         pointercancel:event=>{if(this.pointer?.id===event.pointerId)this._releasePointer('cancel');},
@@ -659,6 +720,7 @@
       for(const node of [...this._tracks.keys()])this._stopTrack(node);
       for(const node of this.nodes.values())node.remove();this.nodes.clear();
       for(const node of this.budNodes.values())node.remove();this.budNodes.clear();
+      for(const node of this.terrainNodes.values())node.remove();this.terrainNodes.clear();
       for(const node of this._retiring)node.remove();this._retiring.clear();
       this._states.clear();this._cues.clear();
       for(const row of this.rowNodes)row.setAttribute('aria-owns','');
