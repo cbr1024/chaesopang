@@ -53,6 +53,7 @@
       this.paused = false;
       this.raf = 0;
       this.lastTime = 0;
+      this.frameMean=16.7;this.frameScale=1;
       this.ambientTime = 0;
       this.particleLimit = (root.innerWidth || 1000) < 720 ? 320 : 480;
       this._feverBounds = null;
@@ -82,30 +83,30 @@
       this._start();
     }
 
+    _sizeCanvas(canvas,ctx,width,height){
+      const w=Math.ceil(width*this.dpr),h=Math.ceil(height*this.dpr);
+      if(canvas.width!==w)canvas.width=w;
+      if(canvas.height!==h)canvas.height=h;
+      ctx.setTransform(this.dpr,0,0,this.dpr,0,0);
+    }
     resize() {
       this.dpr = Math.min(root.devicePixelRatio || 1, 2);
       if (this.canvas && this.ctx) {
         const rect = this.canvas.getBoundingClientRect();
         this.width = Math.max(1, rect.width);
         this.height = Math.max(1, rect.height);
-        this.canvas.width = Math.ceil(this.width * this.dpr);
-        this.canvas.height = Math.ceil(this.height * this.dpr);
-        this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+        this._sizeCanvas(this.canvas,this.ctx,this.width,this.height);
       }
       if (this.ambientCanvas && this.ambientCtx) {
         const rect = this.ambientCanvas.getBoundingClientRect();
         this.ambientWidth = Math.max(1, rect.width || root.innerWidth);
         this.ambientHeight = Math.max(1, rect.height || root.innerHeight);
-        this.ambientCanvas.width = Math.ceil(this.ambientWidth * this.dpr);
-        this.ambientCanvas.height = Math.ceil(this.ambientHeight * this.dpr);
-        this.ambientCtx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+        this._sizeCanvas(this.ambientCanvas,this.ambientCtx,this.ambientWidth,this.ambientHeight);
       }
       if (this.trailCtx) {
         this.trailWidth = Math.max(1, root.innerWidth);
         this.trailHeight = Math.max(1, root.innerHeight);
-        this.trailCanvas.width = Math.ceil(this.trailWidth * this.dpr);
-        this.trailCanvas.height = Math.ceil(this.trailHeight * this.dpr);
-        this.trailCtx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+        this._sizeCanvas(this.trailCanvas,this.trailCtx,this.trailWidth,this.trailHeight);
       }
       if (!this.lights.length) {
         const count = (root.innerWidth || 1000) < 600 ? 16 : 30;
@@ -133,11 +134,11 @@
 
     _add(particle) {
       this.particles.push(particle);
-      const limit = this.reducedMotion ? 80 : this.particleLimit;
+      const limit = this.reducedMotion ? 80 : Math.floor(this.particleLimit*this.frameScale);
       // Preserve the legible score and collection feedback in large cascades.
       // Decorative fragments have a strict mobile budget and leave first.
       if (this.particles.length > limit) {
-        const expendable = this.particles.findIndex(p => !['text','reward','collect','beam'].includes(p.kind));
+        const expendable = this.particles.findIndex(p => !['text','reward','collect','beam','comboHalo'].includes(p.kind));
         this.particles.splice(expendable < 0 ? 0 : expendable, 1);
       }
       this._start();
@@ -150,7 +151,7 @@
       const light = tint(color, 76), deep = tint(color, 45);
       const signature = SIGNATURES[type] || 'leaf', recipe = RECIPES[type] || RECIPES[0];
       power = clamp(Number(power) || 1, 0.4, 3);
-      const count = Math.min(this.reducedMotion ? 5 : Math.round(16 + power * 7),Number.isFinite(budget)?Math.max(1,budget):40);
+      const count = Math.min(this.reducedMotion ? 4 : Math.max(5,Math.round((16 + power * 7)*this.frameScale)),Number.isFinite(budget)?Math.max(1,budget):40);
       this._add({ kind: 'flash', ...p, color, life: 0.24, maxLife: 0.24, size: 22 * power });
       this._add({ kind: 'ring', ...p, color, life: 0.36, maxLife: 0.36,
         size: this.reducedMotion ? 10 : 18 * Math.sqrt(power), ringX:recipe.ringX,ringY:recipe.ringY });
@@ -218,6 +219,17 @@
       }
     }
 
+    comboImpact(clientX,clientY,kind,cellSize=48){
+      if(!this.ctx||this.destroyed||this.reducedMotion)return;
+      const themes={'line-line':['#e4c065',4,1.35],'line-bomb':['#e8ae55',8,1.85],'bomb-bomb':['#d59b71',12,2.2],'rainbow-special':['#d6a4df',10,1.9],'rainbow-rainbow':['#efcf83',12,2.6]};
+      const [color,spokes,scale]=themes[kind]||themes['line-line'],p=this._point(clientX,clientY),size=Math.max(24,cellSize)*scale;
+      this._add({kind:'comboHalo',...p,color,spokes,size,life:.42,maxLife:.42,rainbow:kind.startsWith('rainbow')});
+      const count=Math.max(5,Math.floor(spokes*this.frameScale));
+      for(let i=0;i<count;i++){
+        const angle=i/count*TAU,speed=70+scale*24;
+        this._add({kind:'diamond',...p,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed,color:kind.startsWith('rainbow')?colors()[i%6]:color,size:3.5+i%3,rotation:angle,spin:2,gravity:25,life:.46,maxLife:.46});
+      }
+    }
     score(clientX, clientY, text, color = '#269878') {
       if (!this.ctx || this.destroyed) return;
       const p = this._point(clientX, clientY);
@@ -362,7 +374,10 @@
     _frame(time) {
       this.raf = 0;
       if (this.destroyed || this.paused || document.hidden) return;
-      const dt = this.lastTime ? Math.min((time - this.lastTime) / 1000, 0.04) : 0.016;
+      const elapsed=this.lastTime?time-this.lastTime:16.7;
+      const dt=Math.min(Math.max(elapsed,0)/1000,.05);
+      if(this.particles.length>12&&elapsed<180){this.frameMean=this.frameMean*.92+elapsed*.08;this.frameScale=this.frameMean>32?.62:this.frameMean>23?.8:1;}
+      else if(!this.particles.length){this.frameMean=16.7;this.frameScale=1;}
       this.lastTime = time;
       if (this.ctx) {
         const ctx = this.ctx;
@@ -442,6 +457,14 @@
         if(!this.reducedMotion && reveal<1) for(const edge of [start,end]) {
           ctx.save();ctx.translate(vertical?p.x:edge,vertical?edge:p.y);
           ctx.fillStyle='#fff';ctx.globalAlpha=1;this._starPath(ctx,4+(1-reveal)*5);ctx.fill();ctx.restore();
+        }
+      } else if(p.kind==='comboHalo'){
+        const radius=Math.max(1,p.size*(.24+.76*easeOut(t))),alpha=Math.pow(1-t,1.6)*.8;
+        ctx.translate(p.x,p.y);ctx.globalAlpha=alpha;ctx.lineWidth=Math.max(1,4*(1-t));
+        ctx.strokeStyle='#fffdf1';ctx.beginPath();ctx.arc(0,0,radius*.78,0,TAU);ctx.stroke();
+        for(let i=0;i<p.spokes;i++){
+          const a=i/p.spokes*TAU+t*.13;ctx.strokeStyle=p.rainbow?colors()[i%6]:p.color;
+          ctx.beginPath();ctx.arc(0,0,radius,a+.07,a+TAU/p.spokes*.62);ctx.stroke();
         }
       } else if (p.kind === 'ring') {
         ctx.globalCompositeOperation = 'source-over';
@@ -903,10 +926,9 @@
 
     _track(source, gain, group, end, extra = []) {
       const record = { source, gain, group, extra };
-      if (this.voices.size >= 160) {
-        const oldest = this.voices.values().next().value;
-        if (oldest) this._release(oldest);
-      }
+      const groupLimit=group==='sfx'?54:104,groupVoices=[...this.voices].filter(v=>v.group===group);
+      if(groupVoices.length>=groupLimit)this._release(groupVoices[0]);
+      if(this.voices.size>=158){const oldest=this.voices.values().next().value;if(oldest)this._release(oldest);}
       this.voices.add(record);
       source.onended = () => {
         this.voices.delete(record);
@@ -926,6 +948,7 @@
       this.voices.delete(record);
     }
 
+    stopEffects(){this._stopGroup('sfx');}
     _stopGroup(group) {
       for (const voice of Array.from(this.voices)) if (voice.group === group) this._release(voice);
     }
@@ -1055,10 +1078,10 @@
           }
           case 'collect': note(88, 0, 0.22, 0.05, 'bell'); note(91, 0.05, 0.24, 0.035, 'bell'); break;
           case 'special': [72,76,79,84,88].forEach((n,i) => note(n,i*0.04,0.4,0.085)); break;
-          case 'combo-line-line': [72,84,79,91].forEach((n,i)=>note(n,i*.045,.30,.08,'bell')); break;
-          case 'combo-line-bomb': note(48,0,.32,.10,'wood');[72,76,84,88].forEach((n,i)=>note(n,i*.048,.42,.078,'marimba')); break;
-          case 'combo-bomb-bomb': note(43,0,.38,.12,'wood');note(55,.045,.32,.08,'felt');[72,79,84].forEach((n,i)=>note(n,.07+i*.06,.42,.075,'bell'));break;
-          case 'combo-rainbow-special': [72,74,76,79,81,84].forEach((n,i)=>note(n,i*.045,.45,.068,'glass'));break;
+          case 'combo-line-line': this._duck(.35,.65); [72,84,79,91].forEach((n,i)=>note(n,i*.045,.30,.08,'bell')); break;
+          case 'combo-line-bomb': this._duck(.5,.55);note(48,0,.32,.10,'wood');[72,76,84,88].forEach((n,i)=>note(n,i*.048,.42,.078,'marimba')); break;
+          case 'combo-bomb-bomb': this._duck(.55,.5);note(43,0,.38,.12,'wood');note(55,.045,.32,.08,'felt');[72,79,84].forEach((n,i)=>note(n,.07+i*.06,.42,.075,'bell'));break;
+          case 'combo-rainbow-special': this._duck(.45,.6);[72,74,76,79,81,84].forEach((n,i)=>note(n,i*.045,.45,.068,'glass'));break;
           case 'combo-rainbow-rainbow': this._duck(.65,.5);note(48,0,.55,.085,'pad');[72,76,79,84,88,91,96].forEach((n,i)=>note(n,i*.048,.48,.065,i%2?'glass':'bell'));break;
           case 'seedReward': [79,84,88].forEach((n,i)=>note(n,i*.07,.31,.05,'bell'));break;
           case 'bloom': [77,81,84,89,93].forEach((n,i) => note(n,i*0.055,0.5,0.08,'bell')); break;
