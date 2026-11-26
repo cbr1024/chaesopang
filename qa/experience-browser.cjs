@@ -242,12 +242,18 @@ async function lossCoaching(){
 async function revisionAwarePromise(){
  for(const legacy of [false,true]){
   currentStep=(legacy?'legacy buds':'current frost')+' stage 23 promise';
-  await using({fixture:stageFixture(23,{legacy})},async({page})=>{
-   await page.locator('#v2-home .v2-play').tap();await idle(page);await page.locator('#promise-button').tap();await modal(page);
+  const fixture=stageFixture(23,{legacy});
+  await using({fixture},async({page})=>{
+   await page.locator('#v2-home .v2-play').tap();await idle(page);
+   const before=(await saved(page)).session.game;
+   assert.deepEqual(before,fixture.session.game,'resuming must preserve the exact saved revision and game');
+   await page.locator('#promise-button').tap();await modal(page);
    const detail=await page.locator('.promise-detail').innerText();
    assert.match(detail,legacy?/봉오리/:/서리/,'task advice does not describe this saved revision');
    assert(!(legacy?/서리/:/봉오리/).test(detail),'task advice leaked from the other revision: '+detail);
-   const state=(await saved(page)).session.game;assert.equal(state.version,legacy?Legacy.STATE_VERSION:E.STATE_VERSION,'opening task modal migrated saved game');
+   const state=(await saved(page)).session.game;
+   assert.equal(state.version,fixture.session.game.version,'opening task modal migrated the actual fixture version');
+   assert.deepEqual(state,before,'opening task modal changed the saved game');
    await shot(page,'promise-'+(legacy?'legacy-buds':'current-frost'));pass(currentStep);
   });
  }
