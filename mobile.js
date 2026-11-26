@@ -29,7 +29,8 @@
     });
   }
   const cap = root.Capacitor;
-  let appActive=true,webVibrating=false;
+  let appActive=true,webVibrating=false,lastPointer='';
+  document.addEventListener('pointerdown',event=>{lastPointer=event.pointerType||'';},{capture:true,passive:true});
   const native = Boolean(cap?.isNativePlatform?.());
   const plugin = name => native ? (cap?.Plugins?.[name] || cap?.registerPlugin?.(name) || null) : null;
   const Haptics = plugin('Haptics'), App = plugin('App'), Orientation = plugin('ScreenOrientation');
@@ -40,7 +41,7 @@
     active:()=>appActive&&!document.hidden,
     send:cue=>{
       if(Haptics){quiet(cue.notification?Haptics.notification({type:cue.notification}):Haptics.impact({style:cue.style}));return true;}
-      if(typeof navigator.vibrate==='function'&&root.matchMedia('(pointer:coarse)').matches){
+      if(typeof navigator.vibrate==='function'&&(lastPointer==='touch'||lastPointer==='pen'||Number(navigator.maxTouchPoints)>0||root.matchMedia('(pointer:coarse)').matches)){
         const ok=navigator.vibrate(Array.isArray(cue.pattern)?cue.pattern.slice():cue.pattern);
         webVibrating=ok!==false;return webVibrating;
       }
